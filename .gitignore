@@ -5,6 +5,6 @@
 src/*.o
 src/*.so
 src/*.dll
-Benchmarking/Arigoni/Data/BE1/filtered
-Benchmarking/Arigoni/Data/BE1/raw
-Benchmarking/Arigoni/Data/BE1/final
+Benchmarking/Arigoni/Data/BE1/filtered/*
+Benchmarking/Arigoni/Data/BE1/raw/*
+Benchmarking/Arigoni/Data/BE1/final/*
