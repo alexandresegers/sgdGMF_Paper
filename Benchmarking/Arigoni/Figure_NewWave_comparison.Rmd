@@ -1,0 +1,442 @@
+---
+title: "Untitled"
+author: "Alex"
+date: "2024-03-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(bluster)
+library(SummarizedExperiment)
+library(NewWave)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+source("../sim/utilities.R")
+```
+
+```{r}
+matrix.deviance <- function (mu, y, family = poisson())
+{
+dev = pointwise.deviance(mu, y, family)
+dev = sum(dev, na.rm = TRUE)
+return(dev)
+}
+pointwise.deviance <- function(mu, y, family = poisson()){
+if (length(mu) == 1) {
+mut = y
+mut[] = mu
+mu = mut
+}
+  nona = !is.na(y)
+dev = y
+dev[] = NA
+dev[nona] = family$dev.resids(y[nona], mu[nona], 1)
+return(dev)
+}
+```
+
+
+```{r}
+sce <- readRDS(file = "Data/BE1/final/sce.RDS")
+sce <- sce[(rownames(sce)[order(rowData(sce)$biological.var, decreasing = TRUE)])[1:500],]
+celltypes <- sce$celltype
+
+m <- nrow(sce)
+n <- ncol(sce)
+cells = as.data.frame(colData(sce))
+
+Y = matrix(NA, nrow = n, ncol = m)
+Y[] = t(counts(sce))
+
+
+models <- readRDS(file = "Output_models/NewWave_comparison_results.RDS")
+train_test <- readRDS(file = "Output_models/train_test.RDS")
+
+model.nbwave <- models$NewWave
+model.bsgd <- models$`Poisson-BSGD`
+model.bsgd_poisson <- models$`NB-BSGD`
+
+
+
+test = train_test$test
+train = train_test$train
+```
+
+
+```{r}
+set.seed(100)
+full.sample.error = error.summary(
+  Y, 
+  as.factor(cells$celltype),
+  model.nbwave, 
+  model.bsgd,
+  model.bsgd_poisson)
+print(full.sample.error)
+
+# Out-of-sample error
+in.sample.error = error.summary(
+  train, 
+  as.factor(cells$celltype),
+  model.nbwave, 
+  model.bsgd,
+  model.bsgd_poisson)
+print(in.sample.error)
+
+# Out-of-sample error
+out.sample.error = error.summary(
+  test, 
+  as.factor(cells$celltype),
+  model.nbwave,
+  model.bsgd,
+  model.bsgd_poisson)
+print(out.sample.error)
+
+df_errors = data.frame(rbind(full.sample.error, in.sample.error, out.sample.error))
+df_errors$Sample = rep(c("full", "train", "test"), each = 3)
+df_errors$Model = factor(rep(c("NewWave","SGD-NB","SGD-Poisson"),times = 3),
+                  levels = c("NewWave", "SGD-NB", "SGD-Poisson"))
+df_errors$Sample = as.factor(df_errors$Sample)
+df_errors$Time = as.numeric(df_errors$Time)
+df_errors$RSS = as.numeric(df_errors$RSS)
+df_errors$Cos = as.numeric(df_errors$Cos)
+df_errors$Dev = as.numeric(df_errors$Dev)
+```
+
+
+```{r}
+
+pltime <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = log10(Time), color = Model)) + 
+  geom_point(size = 4) + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) + ylim(c(1.5,4))
+
+prss <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = RSS, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank())+ 
+  ylim(c(0.118,0.165))
+
+pdev <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Dev, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) + 
+  ylim(c(0.125,0.15))
+
+psil <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Sil, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank())
+
+
+ploterrors = ggpubr::ggarrange(
+  pltime, 
+  prss, 
+  pdev,  
+  nrow = 3, ncol = 1, legend = "none"
+) 
+
+
+```
+
+
+```{r}
+
+pltime <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = log10(Time), color = Model)) + 
+  geom_point(size = 4) + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank()) + ylim(c(1.5,4))
+
+prss <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = RSS, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank())+ 
+  ylim(c(0.118,0.165))
+
+pdev <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Dev, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank()) + 
+  ylim(c(0.125,0.15))
+
+psil <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Sil, color = Model)) + 
+  geom_point(size = 4) + 
+    theme_bw() + 
+  theme(axis.title.x = element_blank())
+
+
+ploterrors = ggpubr::ggarrange(
+  pltime + theme(axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank()), 
+  prss+ theme(axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank()), 
+  pdev,  
+  nrow = 3, ncol = 1, legend = "none"
+) 
+
+
+```
+
+```{r}
+pltime
+prss
+pdev
+psil
+ploterrors
+```
+
+
+
+
+```{r}
+df_errors_merged <- data.frame("Model" = df_errors$Model,
+                               "values" = c(log10(df_errors$Time),df_errors$Dev, df_errors$RSS),
+                               "Sample" = c(df_errors$Sample),
+                               "vars" = as.factor(rep(c("log10(Time)", "Deviance","RSS"), each = length(df_errors$Time))))
+
+ggplot(data = df_errors_merged %>% filter(Sample == "test" ), map = aes(x = Model, y = values, col = Model)) + 
+    facet_wrap(~vars, scale = "free_y",nrow = 3, strip.position = "right") +
+  geom_point() + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+
+```
+
+
+
+```{r}
+
+purity_NewWave <- neighborPurity(model.nbwave$u%*%diag(model.nbwave$d), clusters = celltypes)
+purity_sgd_nb <- neighborPurity(model.bsgd$u%*%diag(model.bsgd$d), clusters = celltypes)
+purity_sgd_poisson <- neighborPurity(model.bsgd_poisson$u%*%diag(model.bsgd_poisson$d), clusters = celltypes)
+
+purity_newwave_comparison <- rbind(purity_NewWave, purity_sgd_nb, purity_sgd_poisson)
+purity_newwave_comparison$method <- as.factor(rep(c("NewWave","SGD-NB","SGD-Poisson"), each = 26395))
+purity_newwave_comparison$maximum <- as.factor(purity_newwave_comparison$maximum)
+
+purity_newwave_comparison_mean <- as.data.frame(purity_newwave_comparison) %>% group_by(maximum, method) %>% summarise(mean = mean(purity))
+
+
+
+purity_newwave_lineplot2 <- ggplot(data = purity_newwave_comparison_mean, aes(x = maximum, y = mean, col = method)) + geom_point() + 
+  geom_line(aes(x = as.numeric(maximum), y = mean, col = method)) + 
+  theme_bw() + 
+  ylab("Mean purity per celltype") + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 10),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12)) 
+
+
+purity_newwave_lineplot2
+```
+
+
+```{r}
+
+df_tsne_newwave_comparison <- data.frame("T1" = c(model.nbwave$tsne[,1], model.bsgd$tsne[,1], model.bsgd_poisson$tsne[,1]),
+                                         "T2" = c(model.nbwave$tsne[,2], model.bsgd$tsne[,2], model.bsgd_poisson$tsne[,2]),
+                                         "method" = c(rep(c("NewWave", "SGD-BSGD-NB", "SGD-BSGD-Poisson"), each = 26395)),
+                                         "celltype" = rep(celltypes, times = 3))
+
+
+p_tsne_newwave_comparison <- ggplot(data = df_tsne_newwave_comparison, aes(x = T1, y = T2, col = celltype)) + 
+  geom_point(size = 0.5) +
+  facet_wrap(~method, ncol = 3) + labs(col = "Celltypes") + 
+  theme_bw() + 
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "right") + guides(color = guide_legend(override.aes = list(size = 4)))
+
+
+p_tsne_newwave_comparison
+```
+
+```{r}
+legend_1 <- get_legend(p_tsne_newwave_comparison)
+legend_2 <- get_legend(purity_newwave_lineplot2)
+
+plot(legend_1)
+plot(legend_2)
+legends <- ggarrange(legend_1, legend_2, nrow = 2)
+legends
+
+```
+
+
+```{r}
+
+
+pnewwave_1 <- ggarrange(p_tsne_newwave_comparison, 
+          ggarrange(ploterrors,
+                    purity_newwave_lineplot2, common.legend = TRUE,
+                    legend = "bottom", labels = c("B", "C")), nrow = 2, labels = c("A", NULL))
+
+pnewwave_2 <- ggarrange(ggarrange(p_tsne_newwave_comparison + theme(legend.position = "none"), 
+          ggarrange(ploterrors + theme(legend.position = "none"),
+                    purity_newwave_lineplot2 + theme(legend.position = "none"), 
+                    labels = c("B","C")) ,nrow = 2, labels = c("A", NULL)),
+          legends, widths = c(0.875, 0.125))
+pnewwave_1
+pnewwave_2
+```
+
+
+
+
+# Old
+
+```{r}
+
+
+ggarrange(p_tsne_newwave_comparison, 
+          ggarrange(ploterrors + theme(axis.text.x = element_text(size = 10)),
+                    purity_newwave_lineplot2, common.legend = TRUE,
+                    legend = "bottom", labels = c("B", "C")), nrow = 2, labels = c("A", NULL))
+
+ggarrange(ggarrange(p_tsne_newwave_comparison + theme(legend.position = "none"), 
+          ggarrange(ploterrors + theme(legend.position = "none"),
+                    purity_newwave_lineplot2 + theme(legend.position = "none"), 
+                    labels = c("B","C")) ,nrow = 2, labels = c("A", NULL)),
+          legends, widths = c(0.875, 0.125))
+
+
+```
+
+# Old
+```{r}
+purity_NewWave <- neighborPurity(model.nbwave$u%*%diag(model.nbwave$d), clusters = celltypes)
+purity_sgd_nb <- neighborPurity(model.bsgd$u%*%diag(model.bsgd$d), clusters = celltypes)
+purity_sgd_poisson <- neighborPurity(model.bsgd_poisson$u%*%diag(model.bsgd_poisson$d), clusters = celltypes)
+
+purity_newwave_comparison <- rbind(purity_NewWave, purity_sgd_nb, purity_sgd_poisson)
+purity_newwave_comparison$method <- as.factor(rep(c("NewWave","sgd-nb","sgd-poisson"), each = 26395))
+purity_newwave_comparison$maximum <- as.factor(purity$maximum)
+
+purity_newwave_comparison_mean <- as.data.frame(purity_newwave_comparison) %>% group_by(maximum, method) %>% summarise(mean = mean(purity))
+ggplot(data = purity_newwave_comparison, aes(x = method, y = purity, col = maximum)) + geom_boxplot() + facet_wrap(~maximum)
+ggplot(data = purity_newwave_comparison_mean, aes(x = method, y = mean, col = maximum)) + geom_boxplot() + facet_wrap(~maximum)
+ggplot(data = purity_newwave_comparison_mean, aes(x = method, y = mean, col = maximum)) + geom_point() + geom_line(aes(x = as.numeric(method), y = mean, col = maximum))
+ggplot(data = purity_newwave_comparison_mean, aes(x = maximum, y = mean, col = method)) + geom_point() + geom_line(aes(x = as.numeric(maximum), y = mean, col = method))
+
+```
+
+
+# Old
+
+
+
+```{r}
+pltime_bar <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = log10(Time), fill = Model)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+
+prss_bar <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = RSS, fill = Model)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+pdev_bar <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Dev, fill = Model)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+psil_bar <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Sil, fill = Model)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+ploterrors_bar = ggpubr::ggarrange(
+  pltime_bar, 
+  prss_bar, 
+  pdev_bar,  
+  nrow = 3, ncol = 1, legend = "none"
+) 
+```
+
+
+```{r}
+pltime_bar
+prss_bar
+pdev_bar
+psil_bar
+ploterrors_bar
+```
+
+```{r}
+
+ggplot(data = df_errors_merged %>% filter(Sample == "test" ), map = aes(x = Model, y = values, fill = Model)) + 
+    facet_wrap(~vars, scale = "free_y",nrow = 3, strip.position = "right") +
+
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+```{r}
+ploterrors_bar + theme(legend.position = "none")
+```
+
+```{r}
+ggplot(data = purity_newwave_comparison, aes(x = method, y = purity, col = maximum)) + geom_boxplot() + facet_wrap(~maximum)
+ggplot(data = purity_newwave_comparison_mean, aes(x = method, y = mean, col = maximum)) + geom_boxplot() + facet_wrap(~maximum)
+
+
+purity_newwave_lineplot1 <- ggplot(data = purity_newwave_comparison_mean, aes(x = method, y = mean, col = maximum)) + 
+  geom_point() + 
+  geom_line(aes(x = as.numeric(method), y = mean, col = maximum)) + 
+  theme_bw() + 
+  ylab("Mean purity per celltype") + 
+  theme(axis.title.x = element_blank(),
+        axis.text = element_text(size = 10),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12)) 
+```
+
+
+
+```{r}
+
+
+ggarrange(p_tsne_newwave_comparison, 
+          ggarrange(ploterrors,
+                    purity_newwave_lineplot1, common.legend = TRUE), nrow = 2)
+ggarrange(p_tsne_newwave_comparison, 
+          ggarrange(ploterrors_bar,
+                    purity_newwave_lineplot2, common.legend = TRUE), nrow = 2)
+ggarrange(p_tsne_newwave_comparison, 
+          ggarrange(ploterrors_bar,
+                    purity_newwave_lineplot1, common.legend = TRUE), nrow = 2)
+```
+
+
+

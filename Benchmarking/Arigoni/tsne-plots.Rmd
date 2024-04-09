@@ -1,0 +1,182 @@
+---
+title: "Untitled"
+author: "Alex"
+date: "2024-03-16"
+output: html_document
+---
+```{r}
+df <- readRDS(file = "/Users/alexandresegers/Projects/Doctoraat/sgd_RNAseq/sgdGMF_Paper/Benchmarking/Arigoni/tsneplotdf.RDS")
+
+# Define a custom labeller function
+dim.labs <- c("Latent dimensions: 5", "Latent dimensions: 10", "Latent dimensions: 30")
+names(dim.labs) <- c("5", "10", "30")
+
+hvg.labs <- c("High variable \n genes: 100", "High variable \n genes: 200",
+              "High variable \n genes: 500", "High variable \n genes: 1000",
+              "High variable \n genes: 1500", "High variable \n genes: 2000")
+names(hvg.labs) <- c("100", "200","500", "1000","1500", "2000")
+```
+
+
+```{r}
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_blank())
+
+
+p1
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_rect(fill = "white"))
+
+
+p1
+
+
+
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_rect(fill = "lightgrey"))
+
+
+p1
+
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+
+p1
+
+
+
+```
+
+
+# Old
+```{r}
+df <- readRDS(file = "/Users/alexandresegers/Projects/Doctoraat/sgd_RNAseq/sgdGMF_Paper/Benchmarking/Arigoni/testdfplot.RDS")
+library(gridExtra)
+library(grid)
+library(gridSVG)
+
+
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point() + 
+  facet_grid(hvg ~ dim) + 
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0))
+
+# Create a grid layout
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(4, 5)))
+
+# Print the plot in the middle of the layout
+print(p1, vp = viewport(layout.pos.row = 2:3, layout.pos.col = 2:4))
+
+# Add labels
+grid.text("hvg", vp = viewport(layout.pos.row = 2:3, layout.pos.col = 1, just = "center"))
+grid.text("dim", vp = viewport(layout.pos.row = 1, layout.pos.col = 2:4, just = "center"))
+
+# Save the plot
+grid.export("/Users/alexandresegers/Projects/Doctoraat/sgd_RNAseq/sgdGMF_Paper/Benchmarking/Arigoni/TSNE-hvg-LF_2.pdf")
+
+```
+
+
+
+```{r}
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_blank())
+
+
+p1
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_rect(fill = "white"))
+
+
+p1
+
+
+
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_rect(fill = "lightgrey"))
+
+
+p1
+
+# Use the custom labeller in your plot
+p1 <- ggplot(df, aes(x  = T1, y = T2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_grid(hvg ~ dim, labeller = labeller(hvg = hvg.labs, dim = dim.labs)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+
+p1
+
+```
+

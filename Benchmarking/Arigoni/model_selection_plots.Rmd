@@ -1,0 +1,488 @@
+---
+title: "Untitled"
+author: "Alex"
+date: "2024-03-17"
+output: html_document
+---
+
+```{r}
+library(bluster)
+library(SummarizedExperiment)
+library(NewWave)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+
+```
+
+```{r}
+sce <- readRDS(file = "Data/BE1/final/sce.RDS")
+sce <- sce[(rownames(sce)[order(rowData(sce)$biological.var, 
+                                decreasing = TRUE)])[1:500],]
+sgdmodels_cv <- readRDS(file = "Output_models/sgdGMF-B-SGD-cv.RDS")
+sgd_models <- readRDS(file = "Output_models/sgdGMF-B-SGD-fit-list.RDS")
+
+celltypes <- colData(sce)$celltype
+
+eigenvalues <- readRDS(file = "Output_models/eigenvalues.RDS")
+```
+
+# Model selection
+```{r}
+df_model_selection <- data.frame(vars = rep(c("AIC","BIC","Deviance"), each = nrow(sgdmodels_cv$cv.stat)),
+                 values = c(sgdmodels_cv$cv.stat$aic, sgdmodels_cv$cv.stat$bic, sgdmodels_cv$cv.stat$dev),
+                 ncomp = as.factor(rep(sgdmodels_cv$cv.stat$ncomp, times = 3)))
+
+df_eigenvalues <- data.frame("eigenvalues" = eigenvalues$lambdas, "ncomp" = c(1:500), facet = "1")
+```
+
+```{r}
+scaleFUN <- function(x) sprintf("%.1f", x)
+
+
+
+p_criteria_min_red <- ggplot(data = df_model_selection, aes(x = ncomp, y = values)) + 
+  geom_boxplot() +
+  geom_boxplot(data = df %>% filter(ncomp == 15 & vars == "AIC"), 
+               aes(x=ncomp, y = values, col = "red")) + 
+  geom_boxplot(data = df %>% filter(ncomp == 6 & vars == "BIC"), 
+               aes(x=ncomp, y = values, col = "red")) + 
+  geom_boxplot(data = df %>% filter(ncomp == 15 & vars == "Deviance"), 
+               aes(x=ncomp, y = values, col = "red")) + 
+  geom_boxplot(data = df %>% filter(ncomp %in% c(2,5,10,30)), aes(x=ncomp, y = values), col = "grey60") + 
+
+
+  facet_grid( scale = "free_y", rows = vars(vars)) + 
+  theme_bw() + 
+  xlab("Matrix rank") + 
+  theme(axis.title.y = element_blank(), legend.position = "none") + 
+  scale_y_continuous(labels=scaleFUN) + 
+  theme(plot.margin = margin(0.3, 0.2, 0.2, 0.3, "cm"),
+        strip.text = element_text(size = 11))
+p_criteria_min_red
+```
+
+
+
+
+```{r}
+labels_eigs <- c("Eigenvalues")
+names(labels_eigs) <- "1"
+
+peigs <- ggplot(data = df_eigenvalues %>% filter(ncomp %in% (c(1:50))), aes(x = ncomp, y = eigenvalues)) + geom_point() +   facet_wrap(~facet, scale = "free_y", labeller = labeller(facet = labels_eigs), strip.position = "right") + theme_bw() + 
+  xlab("Matrix rank") +
+   theme(legend.position = "bottom", 
+         legend.title = element_blank(), 
+         legend.text = element_text(size = 10),
+         axis.title.y = element_blank()) + theme(plot.margin = margin(0.3, 0.2, 0.2, 0.3, "cm"),
+         strip.text = element_text(size = 11)) + geom_vline(xintercept = 6.5, col = "red")
+
+peigs
+```
+
+
+# Model evaluation
+
+## Purity
+
+
+```{r}
+library(bluster)
+dimensions <- c(1:10, 15, 20, 30, 40, 50)
+purity_rescaled <- lapply(1:15, function(x) {
+  U_rescaled <- prcomp(sgd_models[[x]]$U %*% t(sgd_models[[x]]$V))$x
+  pur <- neighborPurity(U_rescaled, clusters = celltypes)
+  pur$dim <- c(dimensions[x])
+  return(pur)
+  })
+
+purity_rescaled_merged <- do.call(rbind, purity_rescaled)
+purity_rescaled_merged$dim <- as.factor(purity_rescaled_merged$dim)
+purity_rescaled_mean <- as.data.frame(purity_rescaled_merged) %>% group_by(maximum, dim) %>% summarise(mean = mean(purity))
+
+```
+
+```{r}
+labels_purity <- c("Mean cluster purity")
+names(labels_purity) <- "1"
+
+p_purity_lineplot_rescaled <- ggplot(data = purity_rescaled_mean, aes(x = (dim), y = mean, col = maximum)) + 
+  geom_point(key_glyph = "rect") + geom_line(aes(x = as.numeric(dim)), key_glyph = "rect") + theme_bw() + labs(col ="Celltype") +
+  facet_wrap(~facet, scale = "free_y", labeller = labeller(facet = labels_purity), strip.position = "right") + 
+  xlab("Matrix rank") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 10),
+        axis.title.y = element_blank()) + theme(plot.margin = margin(0.3, 0.2, 0.2, 0.3, "cm"),
+        strip.text = element_text(size = 11))
+p_purity_lineplot_rescaled
+p_purity_lineplot_rescaled + theme(legend.position = "none")
+```
+
+
+## Factors geom tile
+
+
+
+
+```{r}
+i <- 13
+
+df_tile <- data.frame("U" = c(sgd_models[[i]]$U), 
+                           "celltypes" = as.factor(celltypes),
+                           "dim" = as.factor(rep(c(1:ncol(sgd_models[[i]]$U)), 
+                                       each =nrow(sgd_models[[i]]$U))))
+
+df_tile <- df_tile %>% group_by(celltypes, dim) %>% summarise("mean" = mean(U))
+
+ptile <- ggplot(data = df_tile, 
+         aes(x = dim, y = celltypes, fill = mean)) + 
+  geom_tile() + 
+  scale_fill_distiller(palette = 'RdBu') + 
+  labs(fill ="Factor mean")+ 
+                    xlab("Factor number") +
+                    theme_bw()+ 
+                    theme(legend.text = element_text(size = 11),
+                                                  legend.title = element_text(size = 12), 
+                                                  legend.position = "right",
+                          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                          panel.border = element_blank(),
+                          axis.title.y = element_blank())
+ptile
+```
+
+
+```{r}
+library(ggh4x)
+labels_celltypes <- rep(c(""), times = 7)
+names(labels_celltypes) <- unique(df_tile$celltypes)
+ptile_2 <- ggplot(data = df_tile, 
+         aes(x = dim, y = as.numeric(celltypes), fill = mean)) + 
+  geom_tile() + 
+  scale_fill_distiller(palette = 'RdBu')  + 
+  facet_grid2(celltypes~., scales = "free_y", space = "free_y", switch = "y",
+              strip = strip_themed(
+                background_y = elem_list_rect(
+                  fill = rainbow(length(unique(df_tile$celltypes)))))) + 
+  labs(fill ="Factor mean")+ 
+                    xlab("Factor number") +
+                    theme_bw()+ 
+                    theme(legend.text = element_text(size = 11),
+                                                  legend.title = element_text(size = 12), 
+                                                  legend.position = "right",
+                          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                          panel.border = element_blank(),
+                          axis.title.y = element_blank(),
+                          axis.text.y = element_blank(),
+                          axis.ticks.y = element_blank(),
+                          panel.spacing.y = unit(0,"mm"))+
+  scale_y_continuous(
+    labels = unique(df_tile$celltypes),
+    breaks = as.numeric(unique(df_tile$celltypes)),
+    expand = c(0,0)
+  )
+
+
+ptile_3 <- ggplot(data = df_tile, 
+         aes(x = dim, y = as.numeric(celltypes), fill = mean)) + 
+  geom_tile() + 
+  scale_fill_distiller(palette = 'RdBu')  + 
+  facet_grid2(celltypes~., scales = "free_y", space = "free_y", switch = "y",
+              strip = strip_themed(
+                background_y = elem_list_rect(
+                  fill = rainbow(length(unique(df_tile$celltypes))))),
+              labeller = labeller(celltypes = labels_celltypes)) + 
+  labs(fill ="Factor mean")+ 
+                    xlab("Factor number") +
+                    theme_bw()+ 
+                    theme(legend.text = element_text(size = 11),
+                                                  legend.title = element_text(size = 12), 
+                                                  legend.position = "right",
+                          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                          panel.border = element_blank(),
+                          axis.title.y = element_blank(),
+                          panel.spacing.y = unit(0,"mm"))+
+  scale_y_continuous(
+    labels = unique(df_tile$celltypes),
+    breaks = as.numeric(unique(df_tile$celltypes)),
+    expand = c(0,0)
+  )
+```
+
+
+```{r}
+ptile
+ptile_2
+ptile_3
+```
+
+```{r}
+colors1 <- clusterExperiment::bigPalette[1:50]
+names(colors1) <- sort(colnames(loadings_filtered))
+library(tidyverse)
+df_tile_wide <- as.data.frame(df_tile) %>%
+  pivot_wider(names_from = "dim", values_from = "mean") %>% as.data.frame()
+rownames(df_tile_wide) <- df_tile_wide$celltypes
+df_tile_wide$celltypes <- NULL
+
+pheatmap_factors <- pheatmap(df_tile_wide, 
+                             scale = "none",
+                             annotation_legend = TRUE,
+         #annotation_col = data.frame(
+         #  cluster = colnames(loadings_filtered), 
+#           ncells = sce_pseudo$ncells,
+          # row.names = colnames(loadings_filtered)),
+         annotation_colors = list(colors1),
+         color = rev(RColorBrewer::brewer.pal(11, "RdBu")),
+cluster_cols = F,
+cluster_rows = F)
+
+pheatmap_factors
+```
+
+
+```{r}
+library(ggplot2)
+library(ggplotify)
+library(patchwork)
+
+colors1 <- clusterExperiment::bigPalette[1:50]
+names(colors1) <- sort(colnames(loadings_filtered))
+
+pheatmap_plot <- as.grob(pheatmap(df_tile_wide, scale = "none", annotation_legend = TRUE,
+                   annotation_row = data.frame(celltype = rownames(df_tile_wide),
+                                               row.names = rownames(df_tile_wide)),
+                   #annotation_colors = list(celltype ),
+                   color = rev(RColorBrewer::brewer.pal(11, "RdBu")),
+                   cluster_cols = F,
+                   cluster_rows = F)) 
+plot(pheatmap_plot)
+get_legend(pheatmap_factors)
+pheatmap_plot+ theme(legend.position = "none")
+```
+
+
+# t-sne plots
+
+```{r}
+df_tsne_plot <- as.data.frame(do.call(rbind,tsne_list))
+df_tsne_plot$dim <- rep(c(1:10, 15, 20, 30, 40, 50), each = nrow(tsne_list[[1]]))
+df_tsne_plot$celltypes <- rep(celltypes, times = 15)
+```
+
+
+```{r}
+dim.labs.tsne <- c("Matrix rank: 2","Matrix rank: 6", "Matrix rank: 15", "Matrix rank: 30")
+names(dim.labs.tsne) <- c("2", "6", "15", "30")
+
+p_tsne <- ggplot(df_tsne_plot %>% filter(dim %in% c(2, 6, 15, 30)), aes(x  = V1, y = V2, col = celltypes)) +
+  geom_point(alpha = 0.5, size = 0.5) + 
+  facet_wrap(~ dim, labeller = labeller(dim = dim.labs.tsne)) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) + theme(plot.margin = margin(0.3, 0.2, 0.2, 1, "cm"),
+        strip.text = element_text(size = 11))
+
+
+p_tsne
+```
+
+```{r}
+p_model_selection <- ggpubr::ggarrange(p_criteria_min_red + theme(axis.title = element_blank()), 
+                                       NULL, 
+                                       peigs,
+                                       nrow = 3, heights = c(3,0,2))
+p_model_selection
+```
+
+```{r}
+legend_1 <- get_legend(p_purity_lineplot_rescaled)
+legend_2 <- get_legend(ptile)
+
+plot(legend_1)
+plot(legend_2)
+legends <- ggarrange(legend_1, legend_2, nrow = 2)
+legends
+```
+
+```{r}
+final_plot1 <- ggarrange(ggpubr::ggarrange(p_model_selection,
+                            p_tsne  ,
+                            p_purity_lineplot_rescaled+ theme(legend.position = "none"),
+                            ptile + theme(legend.position = "none"),
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO"), 
+          legends, 
+          widths = c(0.9,0.1))
+
+
+final_plot2 <- ggarrange(ggpubr::ggarrange(p_model_selection,
+                            p_tsne  ,
+                            p_purity_lineplot_rescaled+ theme(legend.position = "none"),
+                            ptile_2 + theme(legend.position = "none"),
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO"), 
+          legends, 
+          widths = c(0.9,0.1))
+
+
+final_plot3 <- ggarrange(ggpubr::ggarrange(p_model_selection,
+                            p_tsne  ,
+                            p_purity_lineplot_rescaled+ theme(legend.position = "none"),
+                            ptile_3 + theme(legend.position = "none"),
+                          nrow = 2, ncol = 2, widths = c(2,3), heights = c(3,2), labels = "AUTO"), 
+          legends, 
+          widths = c(0.875,0.125))
+
+
+
+```
+
+```{r}
+final_plot1
+final_plot2
+final_plot3
+```
+
+```{r}
+ggsave(final_plot3, filename = "model_selection_figure_draft_1.pdf",
+       width = 11, height = 7.5)
+```
+
+#old
+
+```{r}
+
+ggpubr::ggarrange(ggarrange(p_criteria + ggtitle("Model selection criteria"),
+                            p_purity_lineplot + ggtitle("Performance") + labs(col ="Celltype") ,nrow = 2, 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne + ggtitle("tSNE projection"),
+                            pvarexplained + ggtitle("Percentage of variance explained"), nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+
+ggpubr::ggarrange(ggarrange(p_criteria + ggtitle("Model selection criteria"),
+                            p_purity_lineplot + ggtitle("Performance") + labs(col ="Celltype"), 
+                            p_Modularity_ratio + labs(col ="Celltype") ,nrow = 3, heights = c(2,1,1), 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne + ggtitle("tSNE projection"),
+                            pvarexplained + ggtitle("Percentage of variance explained"), nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+
+
+ggpubr::ggarrange(ggarrange(p_criteria + ggtitle("Model selection criteria"),
+                            p_purity_lineplot + ggtitle("Performance") + labs(col ="Celltype") ,nrow = 2, 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne + ggtitle("tSNE projection"),
+                            ptile + ggtitle("Mean factor magnitude"), nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+
+ggpubr::ggarrange(ggarrange(p_criteria + ggtitle("Model selection criteria"),
+                            p_purity_lineplot + ggtitle("Performance") + labs(col ="Celltype"), 
+                            p_Modularity_ratio + labs(col ="Celltype") ,nrow = 3, heights = c(2,1,1), 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne + ggtitle("tSNE projection"),
+                            ptile + ggtitle("Mean factor magnitude"), nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+```
+
+
+```{r}
+save.image("model_selection_plot_data.Rdata")
+```
+
+```{r}
+ggpubr::ggarrange(p_criteria,
+                            p_tsne  ,
+                            p_purity_lineplot ,
+                            pvarexplained ,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+ggpubr::ggarrange(p_criteria_min,
+                            p_tsne  ,
+                            p_purity_lineplot ,
+                            pvarexplained ,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+ggpubr::ggarrange(p_criteria_red,
+                            p_tsne  ,
+                            p_purity_lineplot,
+                            pvarexplained,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+```
+
+```{r}
+ggpubr::ggarrange(p_criteria,
+                            p_tsne  ,
+                            p_purity_lineplot ,
+                            pvarexplained ,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            p_purity_lineplot,nrow = 2, 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne,
+                            ptile, nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+```
+
+
+```{r}
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            ptile, 
+                            ncol = 2),
+                  ggarrange(p_purity_lineplot  ,
+                            p_tsne, ncol = 2,
+                            common.legend = TRUE),
+                          nrow = 2, ncol = 1, heights = c(2,3))
+
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            p_purity_lineplot,nrow = 2, 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne,
+                            ptile, nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+```
+
+
+```{r}
+ggpubr::ggarrange(p_criteria,
+                            p_tsne  ,
+                            p_purity_lineplot ,
+                            pvarexplained ,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            p_purity_lineplot , 
+                            p_Modularity_ratio ,nrow = 3, heights = c(2,1,1), 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne ,
+                            pvarexplained , nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+```
+
+
+```{r}
+
+ggpubr::ggarrange(p_criteria,
+                            p_tsne  ,
+                            p_purity_lineplot ,
+                            pvarexplained ,
+                          nrow = 2, ncol = 2, widths = c(2,3), labels = "AUTO")
+
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            p_purity_lineplot,nrow = 2, 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne,
+                            ptile, nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+
+ggpubr::ggarrange(ggarrange(p_criteria ,
+                            p_purity_lineplot , 
+                            p_Modularity_ratio  ,nrow = 3, heights = c(2,1,1), 
+                            common.legend = TRUE, legend = "bottom"),
+                  ggarrange(p_tsne ,
+                            ptile, nrow = 2),
+                          nrow = 1, ncol = 2, widths = c(2,3))
+```
+
