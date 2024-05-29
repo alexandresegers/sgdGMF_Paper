@@ -1,0 +1,3 @@
+source: https://figshare.com/articles/dataset/BE1_10XGenomics_count_matrices/23939481/1
+authors: Arigoni, Maddalena and Ratto, Maria Luisa and Riccardo, Federica and Balmas, Elisa and Calogero, Lorenzo and Cordero, Francesca and Beccuti, Marco and Calogero, Raffaele A and Alessandri, Luca
+data: each folder correspond to a different cell-line
