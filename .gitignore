@@ -8,3 +8,9 @@ src/*.dll
 Benchmarking/Arigoni/Data/BE1/filtered/*
 Benchmarking/Arigoni/Data/BE1/raw/*
 Benchmarking/Arigoni/Data/BE1/final/*
+Benchmarking/Arigoni/Output_models/*.RDS
+Benchmarking/Arigoni/*.txt*
+Benchmarking/Arigoni/*.html*
+Benchmarking/CaseStudy/*.txt*
+Benchmarking/CaseStudy/*.html*
+Benchmarking/CaseStudy/Output_files/*.RDS
