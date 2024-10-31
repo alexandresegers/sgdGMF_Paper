@@ -4,10 +4,12 @@
 \alias{normalize.uv}
 \title{Normalize the matrices U and V}
 \usage{
-normalize.uv(U, V, method = c("svd", "qr"))
+normalize.uv(U, V, method = c("qr", "svd"))
 }
 \description{
-Rotate U and V in such a way that the transformed matrices
-are such that U is orthogonal and V is lower triangular
+Rotate U and V using either QR or SVD decompositions.
+The QR methods rotate U and V in such a way to obtain an orthogonal U
+and a lower triangular V.  The SVD method rotate U and V in such a way
+to obtain an orthogonal U and a scaled orthogonal V.
 }
 \keyword{internal}

@@ -39,7 +39,8 @@ ncomp <- 10
 
 for(i in c(1:5)){
   t0 <- Sys.time()
-  fit <- sgdGMF::sgdgmf.fit(Y=Y, X=X, ncomp=ncomp, family=family, method = "bsgd",
+  fit <- sgdGMF::sgdgmf.fit(Y=Y, X=X, ncomp=ncomp, family=family, method = "sgd",
+                            sampling = "block",
                             control.alg = list(maxiter = 1000, size = c(1000,250)),
                             control.init = list(method = "ols", type = "link"))
   t1 <- Sys.time()

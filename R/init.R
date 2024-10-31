@@ -2,100 +2,381 @@
 #' @title Initialize the parameters of a generalized matrix factorization model
 #'
 #' @description
-#' Provide four initialization methods to set the initial values of the parameters of
+#' Provide four initialization methods to set the initial values of
 #' a generalized matrix factorization (GMF) model identified by a \code{\link{glm}} family
-#' and a linear predictor of the form \eqn{g(\mu) = \eta = X B^\top + \Gamma Z^\top + U V^\top},
+#' and a linear predictor of the form \eqn{g(\mu) = \eta = X B^\top + A Z^\top + U V^\top},
 #' with bijective link function \eqn{g(\cdot)}.
-#' See \code{\link{sgdgmf}} for more details on the model specification.
+#' See \code{\link{sgdgmf.fit}} for more details on the model specification.
 #'
 #' @param Y matrix of responses (\eqn{n \times m})
-#' @param X matrix of row fixed effects (\eqn{n \times p})
-#' @param Z matrix of column fixed effects (\eqn{q \times m})
-#' @param ncomp rank of the latent matrix factorization (default 2)
-#' @param family a family as in the \code{\link{glm}} interface (default \code{gaussian()})
-#' @param method optimization method:  \code{"svd"} (default), \code{"glm"}, \code{"random"}, \code{"values"}
-#' @param niter number of iterations to refine the initial estimate (defult 0)
-#' @param values a list of custom initial values for \code{B}, \code{A}, \code{U} and \code{V}, or a subset of them
-#' @param verbose print the status of the initialization process
+#' @param X matrix of row-specific fixed effects (\eqn{n \times p})
+#' @param Z matrix of column-specific fixed effects (\eqn{q \times m})
+#' @param ncomp rank of the latent matrix factorization
+#' @param family a model family, as in the \code{\link{glm}} interface
+#' @param method optimization method to be used for the initial fit
+#' @param type type of residuals to be used for initializing \code{U} via incomplete SVD decomposition
+#' @param niter number of iterations to refine the initial estimate (only if \code{method="ols"} or \code{"svd"})
+#' @param values a list of custom initial values for \code{B}, \code{A}, \code{U} and \code{V}
+#' @param verbose if \code{TRUE}, prints the status of the initialization process
+#' @param parallel if \code{TRUE}, allows for parallel computing using the \code{foreach} package (only if \code{method="glm"})
+#' @param nthreads number of cores to be used in parallel (only if \code{parallel=TRUE} and \code{method="glm"})
+#' @param savedata if \code{TRUE}, stores a copy of the input data
 #'
 #' @return
-#' A list containing the initial values of \code{B}, \code{A}, \code{U}, \code{V} and \code{phi}.
+#' An \code{initgmf} object, namely a list, containing the initial estimates of the GMF parameters.
+#' In particular, the returned object collects the following information:
+#' \itemize{
+#'   \item \code{Y}: response matrix (only if \code{savedata=TRUE})
+#'   \item \code{X}: row-specific covariate matrix (only if \code{savedata=TRUE})
+#'   \item \code{Z}: column-specific covariate matrix (only if \code{savedata=TRUE})
+#'   \item \code{B}: the estimated col-specific coefficient matrix
+#'   \item \code{A}: the estimated row-specific coefficient matrix
+#'   \item \code{U}: the estimated factor matrix
+#'   \item \code{V}: the estimated loading matrix
+#'   \item \code{phi}: the estimated dispersion parameter
+#'   \item \code{method}: the selected estimation method
+#'   \item \code{family}: the model family
+#'   \item \code{ncomp}: rank of the latent matrix factorization
+#'   \item \code{type}: type of residuals used for the initialization of \code{U}
+#'   \item \code{verbose}: if \code{TRUE}, print the status of the initialization process
+#'   \item \code{parallel}: if \code{TRUE}, allows for parallel computing
+#'   \item \code{nthreads}: number of cores to be used in parallel
+#'   \item \code{savedata}: if \code{TRUE}, stores a copy of the input data
+#' }
 #'
 #' @details
-#' \code{method="svd"}: the initialization is performed fitting a sequence of linear
+#' If \code{method = "ols"}, the initialization is performed fitting a sequence of linear
 #' regressions followed by a residual SVD decomposition.
-#' To account for the non-Gaussian distribution of the data, regression and
-#' decomposition are applied on the transformed response matrix \eqn{Y_h = g(h(Y))},
+#' To account for non-Gaussian distribution of the data, regression and
+#' decomposition are applied on the transformed response matrix \eqn{Y_h = (g \circ h)(Y)},
 #' where \eqn{h(\cdot)} is a function which prevent \eqn{Y_h} to take infinite values.
 #' For instance, in the Binomial case \eqn{h(y) = 2 (1-\epsilon) y + \epsilon},
 #' while in the Poisson case \eqn{h(y) = y + \epsilon}, where \eqn{\epsilon} is a small
 #' positive constant, typically \code{0.1} or \code{0.01}.
 #'
-#' \code{method="glm"}: the initialization is performed by fitting a sequence of
+#' If \code{method = "glm"}, the initialization is performed by fitting a sequence of
 #' generalized linear models followed by a residual SVD decomposition.
-#' In particular, we use independent GLM fit \eqn{y_j \sim X \beta_j} to set \eqn{\beta_j}.
-#' Similarly, we fit the model \eqn{y_i \sim Z \gamma_i + o_i} with offset \eqn{o_i = B x_i}
-#' to set \eqn{\gamma_j}. Then, \eqn{U} and \eqn{V} are obtained via SVD on the final
-#' working residuals.
+#' In particular, to set \eqn{\beta_j}, we use independent GLM fit with \eqn{y_j \sim X \beta_j}.
+#' Similarly, to set \eqn{\alpha_i}, we fit the model \eqn{y_i \sim Z \alpha_i + o_i}, with offset \eqn{o_i = B x_i}.
+#' Then, we obtain \eqn{U} via SVD on the residuals. Finally, we obtain \eqn{V} via independent GLM fit
+#' under the model \eqn{y_j \sim U v_j + o_j}, with offset \eqn{o_i = X \beta_j + A z_j}.
 #'
-#' \code{method="random"}: the initialization is performed using independent Gaussian
-#' random values for all the parameters in the model
+#' Both under \code{method = "ols"} and \code{method = "glm"}, it is possible to specify the
+#' parameter \code{type} to change the type of residuals used for the SVD decomposition.
 #'
-#' \code{method="values"}: the initialization is performed using the user-specified
-#' values provided as an input. The parameters not provided by the user are set
-#' using the same strategy described in \code{method="svd"}.
+#' If  \code{method = "random"}, the initialization is performed using independent Gaussian
+#' random values for all the parameters in the model.
 #'
-#'
-#' @importFrom svd propack.svd
+#' If \code{method = "values"}, the initialization is performed using user-specified
+#' values provided as an input, which must have compatible dimensions.
 #'
 #' @examples
-#' ...
+#' library(sgdGMF)
 #'
-#' @keywords internal
-init.param = function (
+#' # Set the data dimensions
+#' n = 100; m = 20; d = 5
+#'
+#' # Generate data using Poisson, Binomial and Gamma models
+#' data_pois = sim.gmf.data(n = n, m = m, ncomp = d, family = poisson())
+#' data_bin = sim.gmf.data(n = n, m = m, ncomp = d, family = binomial())
+#' data_gam = sim.gmf.data(n = n, m = m, ncomp = d, family = Gamma(link = "log"), dispersion = 0.25)
+#'
+#' # Initialize the GMF parameters assuming 3 latent factors
+#' init_pois = sgdgmf.init(data_pois$Y, ncomp = 3, family = poisson(), method = "ols")
+#' init_bin = sgdgmf.init(data_bin$Y, ncomp = 3, family = binomial(), method = "ols")
+#' init_gam = sgdgmf.init(data_gam$Y, ncomp = 3, family = Gamma(link = "log"), method = "ols")
+#'
+#' # Get the fitted values in the link and response scales
+#' mu_hat_pois = fitted(init_pois, type = "response")
+#' mu_hat_bin = fitted(init_bin, type = "response")
+#' mu_hat_gam = fitted(init_gam, type = "response")
+#'
+#' # Compare the results
+#' par(mfrow = c(3,3), mar = c(1,1,3,1))
+#' image(data_pois$Y, axes = FALSE, main = expression(Y[Pois]))
+#' image(data_pois$mu, axes = FALSE, main = expression(mu[Pois]))
+#' image(mu_hat_pois, axes = FALSE, main = expression(hat(mu)[Pois]))
+#' image(data_bin$Y, axes = FALSE, main = expression(Y[Bin]))
+#' image(data_bin$mu, axes = FALSE, main = expression(mu[Bin]))
+#' image(mu_hat_bin, axes = FALSE, main = expression(hat(mu)[Bin]))
+#' image(data_gam$Y, axes = FALSE, main = expression(Y[Gam]))
+#' image(data_gam$mu, axes = FALSE, main = expression(mu[Gam]))
+#' image(mu_hat_gam, axes = FALSE, main = expression(hat(mu)[Gam]))
+#'
+#' @export sgdgmf.init
+sgdgmf.init = function (
     Y,
     X = NULL,
     Z = NULL,
     ncomp = 2,
     family = gaussian(),
-    method = c("svd", "glm", "random", "values"),
+    method = c("ols", "glm", "random", "values"),
+    type = c("deviance", "pearson", "working", "link"),
     niter = 0,
     values = list(),
-    verbose = FALSE
+    verbose = FALSE,
+    parallel = FALSE,
+    nthreads = 1,
+    savedata = TRUE
 ) {
+  # Maybe I can change this function's name to sgdgmf.init
 
+  # Set the initialization method
   method = match.arg(method)
 
-  # Initialize U, V and beta using the selected method
-  init = NULL
-  if (method == "svd") {
-    init = init.param.svd(Y, X, Z, ncomp, family, niter, verbose)
-  } else if (method == "glm") {
-    init = init.param.glm(Y, X, Z, ncomp, family, verbose)
-  } else if (method == "random") {
-    init = init.param.random(Y, X, Z, ncomp)
-  } else if (method == "values") {
-    init = init.param.custom(Y, X, Z, ncomp, family, values, verbose)
-  } else {
-    stop("Not allowed initialization method.")
+  # Initialize the parameters using the selected method
+  init = switch(method,
+    "ols" = sgdgmf.init.ols(Y, X, Z, ncomp, family, type, verbose),
+    "glm" = sgdgmf.init.glm(Y, X, Z, ncomp, family, type, verbose, parallel, nthreads),
+    "random" = sgdgmf.init.random(Y, X, Z, ncomp),
+    "values" = sgdgmf.init.custom(Y, X, Z, ncomp, family, values, verbose))
+
+  # Data dimensions
+  n = nrow(Y)
+  m = ncol(Y)
+  p = ifelse(is.null(X), 1, ncol(X))
+  q = ifelse(is.null(Z), 1, ncol(Z))
+
+  # Save all the initialization options
+  init$method = method
+  init$family = family
+  init$ncomp = ncomp
+  init$npar = n * p + m * q + ncomp * (n + m)
+  init$type = type
+  init$verbose = verbose
+  init$parallel = parallel
+  init$nthreads = nthreads
+  init$savedata = savedata
+
+  if (savedata) {
+    init$Y = matrix(NA, nrow = n, ncol = m)
+    init$X = matrix(NA, nrow = n, ncol = p)
+    init$Z = matrix(NA, nrow = m, ncol = q)
+
+    init$Y[] = Y
+    init$X[] = if (!is.null(X)) X else matrix(1, nrow = n, ncol = p)
+    init$Z[] = if (!is.null(Z)) Z else matrix(1, nrow = m, ncol = q)
   }
 
+  # Set the initialization class
+  class(init) = "initgmf"
+
+  # Return the initial estimates
   return (init)
 }
 
-#' @title Random initialization
-#'
-#' @description
-#' Initialize the parameters of a GMF model sampling them from an independent
-#' Gaussian distribution (see \code{\link{init.param}} for more details)
-#'
+#' @rdname sgdgmf.init
 #' @keywords internal
-init.param.random = function (
+sgdgmf.init.ols = function (
     Y,
     X = NULL,
     Z = NULL,
     ncomp = 2,
-    family = poisson()
+    family = gaussian(),
+    type = c("deviance", "pearson", "working", "link"),
+    verbose = FALSE
+) {
+  # Set the residual type
+  type = match.arg(type)
+
+  # Set the covariate matrices
+  if (is.null(X)) X = matrix(1, nrow = nrow(Y), ncol = 1)
+  if (is.null(Z)) Z = matrix(1, nrow = ncol(Y), ncol = 1)
+
+  # Set the minimum and maximum of the data
+  minY = min(Y)
+  maxY = max(Y)
+
+  # Set the model dimensions
+  n = nrow(Y)
+  m = ncol(Y)
+  p = ncol(X)
+  q = ncol(Z)
+  d = ncomp
+
+  # Set the data transformation to use for
+  # the initialization of the working data
+  family = set.family(family)
+
+  # Compute the transformed data
+  if (verbose) cat(" Initialization: working data \n")
+  if (anyNA(Y)) {
+    isna = is.na(Y)
+    Y[] = apply(Y, 2, function (x) {
+      x[is.na(x)] = mean(x, na.rm = TRUE)
+      return (x)
+    })
+  }
+  gY = family$transform(Y)
+
+  # Initialize the parameters
+  B = matrix(NA, nrow = m, ncol = p)
+  A = matrix(NA, nrow = n, ncol = q)
+  U = matrix(NA, nrow = n, ncol = d)
+  V = matrix(NA, nrow = m, ncol = d)
+
+  # Compute the initial column-specific regression parameters
+  if (verbose) cat(" Initialization: column-specific covariates \n")
+  B[] = ols.fit.coef(gY, X, offset = NULL)
+  eta = tcrossprod(X, B)
+
+  # Compute the initial row-specific regression parameter
+  if (verbose) cat(" Initialization: row-specific covariates \n")
+  A[] = ols.fit.coef(t(gY), Z, offset = t(eta))
+  eta = eta + tcrossprod(A, Z)
+
+  # Compute the GLM residuals to be decompose via PCA
+  mu = family$linkinv(eta)
+  mu[mu > maxY] = maxY
+  mu[mu < minY] = minY
+
+  res = switch(type,
+    "deviance" = sign(Y - mu) * sqrt(abs(family$dev.resids(Y, mu, 1))),
+    "pearson" = (Y - mu) / sqrt(family$variance(mu)),
+    "working" = (Y - mu) * family$mu.eta(eta) / abs(family$variance(mu)),
+    "link" = (gY - eta))
+
+  if (anyNA(res)) res[is.nan(res) | is.na(res)] = 0
+
+  # Compute the initial latent factors via incomplete SVD
+  if (verbose) cat(" Initialization: latent scores \n")
+  U[] = RSpectra::svds(res, ncomp)$u
+
+  # Compute the initial loading matrix via OLS
+  if (verbose) cat(" Initialization: latent loadings \n")
+  V[] = ols.fit.coef(gY, U, offset = eta)
+  eta = eta + tcrossprod(U, V)
+
+  # Compute the initial vector of dispersion parameters
+  mu = family$linkinv(eta)
+  var = family$variance(mu)
+  phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
+
+  # Return the obtained initial values
+  list(U = U, V = V, A = A, B = B, phi = phi)
+}
+
+
+#' @rdname sgdgmf.init
+#' @keywords internal
+sgdgmf.init.glm = function (
+    Y,
+    X = NULL,
+    Z = NULL,
+    ncomp = 2,
+    family = gaussian(),
+    type = c("deviance", "pearson", "working", "link"),
+    verbose = FALSE,
+    parallel = FALSE,
+    nthreads = 1
+) {
+
+  # Model dimensions
+  n = nrow(Y)
+  m = ncol(Y)
+  d = ncomp
+
+  # Set the residual type
+  type = match.arg(type)
+
+  # Set the data transformation to use for
+  # the initialization of the working data
+  family = set.family(family)
+
+  # Compute the transformed data
+  if (verbose) cat(" Initialization: working data \n")
+  if (anyNA(Y)) {
+    isna = is.na(Y)
+    Y[] = apply(Y, 2, function (x) {
+      x[is.na(x)] = mean(x, na.rm = TRUE)
+      return (x)
+    })
+  }
+
+  # Set the covariate matrices
+  if (is.null(X)) X = matrix(1, nrow = nrow(Y), ncol = 1)
+  if (is.null(Z)) Z = matrix(1, nrow = ncol(Y), ncol = 1)
+
+  # Set the minimum and maximum of the data
+  minY = min(Y)
+  maxY = max(Y)
+
+  # Initialize the mean and variance matrices
+  eta = matrix(NA, nrow = n, ncol = m)
+  mu  = matrix(NA, nrow = n, ncol = m)
+  var = matrix(NA, nrow = n, ncol = m)
+  res = matrix(NA, nrow = n, ncol = m)
+
+  # Register and open the connection to the clusters
+  clust = NULL
+  if (parallel) {
+    ncores = parallel::detectCores() - 1
+    ncores = max(1, min(nthreads, ncores))
+    clust = parallel::makeCluster(ncores)
+    doParallel::registerDoParallel(clust)
+  }
+
+  # Column-specific covariate vector initialization
+  if (verbose) cat(" Initialization: column-specific covariates \n")
+  B = vglm.fit.coef(Y, X, family = family, offset = NULL,
+                    parallel = parallel, nthreads = nthreads, clust = clust)
+
+  # Update the linear predictor
+  eta[] = tcrossprod(X, B)
+
+  # Row-specific covariate vector initialization
+  if (verbose) cat(" Initialization: row-specific covariates \n")
+  A = vglm.fit.coef(t(Y), Z, family = family, offset = t(eta),
+                    parallel = parallel, nthreads = nthreads, clust = clust)
+
+  # Update the linear predictor and the conditional mean matrix
+  eta[] = eta + tcrossprod(A, Z)
+  mu[] = family$linkinv(eta)
+
+  mu[mu > maxY] = maxY
+  mu[mu < minY] = minY
+
+  # Compute the residuals
+  res[] = switch(type,
+    "deviance" = sign(Y - mu) * sqrt(abs(family$dev.resids(Y, mu, 1))),
+    "pearson" = (Y - mu) / sqrt(abs(family$variance(mu))),
+    "working" = (Y - mu) * family$mu.eta(eta) / abs(family$variance(mu)),
+    "link" = (family$transform(Y) - eta))
+
+  if (anyNA(res)) res[is.na(res) | is.nan(res)] = 0
+
+  # Initialize the latent factors via residual SVD
+  if (verbose) cat(" Initialization: latent scores \n")
+  U = RSpectra::svds(res, k = ncomp)$u
+
+  # Initialize the loading matrix via GLM regression
+  if (verbose) cat(" Initialization: latent loadings \n")
+  V = vglm.fit.coef(Y, U, family = family, offset = eta,
+                    parallel = parallel, nthreads = nthreads, clust = clust)
+
+  # Close the connection to the clusters
+  if (parallel) parallel::stopCluster(clust)
+
+  # Compute the initial vector of dispersion parameters
+  eta[] = eta + tcrossprod(U, V)
+  mu[] = family$linkinv(eta)
+  var[] = family$variance(mu)
+  phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
+
+  # Output
+  list(U = U, V = V, A = A, B = B, phi = phi)
+}
+
+
+#' @rdname sgdgmf.init
+#' @keywords internal
+sgdgmf.init.random = function (
+    Y,
+    X = NULL,
+    Z = NULL,
+    ncomp = 2,
+    family = gaussian(),
+    sigma = 1
 ) {
 
   # Derive data dimensions
@@ -104,8 +385,8 @@ init.param.random = function (
   d = ncomp
 
   # Derive covariate dimensions
-  p = 0
-  q = 0
+  p = 1
+  q = 1
   if (!is.null(X)) p = ncol(X) # n x p matrix
   if (!is.null(Z)) q = ncol(Z) # m x q matrix
 
@@ -116,7 +397,7 @@ init.param.random = function (
   dimA = c(n, q)
 
   # parameter generation
-  sd = 1e-01
+  sd = 1e-01 * sigma
   U = array(rnorm(prod(dimU)) / prod(dimU) * sd, dimU)
   V = array(rnorm(prod(dimV)) / prod(dimV) * sd, dimV)
   B = array(rnorm(prod(dimB)) / prod(dimB) * sd, dimB)
@@ -127,401 +408,46 @@ init.param.random = function (
   list(U = U, V = V, A = A, B = B, phi = phi)
 }
 
-#' @title OLS-SVD initialization
-#'
-#' @description
-#' Initialize the parameters of a GMF model fitting a sequence of multivariate
-#' linear regression followed by a residual SVD decomposition. It allows to
-#' recursively refine the initial estimate by repeating the process a pre-specified
-#' number of times. See \code{\link{init.param}} for more details.
-#'
-#' @import svd
-#'
+
+#' @rdname sgdgmf.init
 #' @keywords internal
-init.param.svd = function (
+sgdgmf.init.custom = function (
     Y,
     X = NULL,
     Z = NULL,
     ncomp = 2,
-    family = poisson(),
-    niter = 0,
-    verbose = FALSE
-) {
-
-  n = nrow(Y)
-  m = ncol(Y)
-  d = ncomp
-
-  # Select the data transformation to use for
-  # the initialization of the working data
-  f = set.jitter(family)
-
-  # Compute the transformed data
-  if (verbose) cat(" Initialization: working data \n")
-  isna = is.na(Y)
-  y = matrix(NA, nrow = n, ncol = m)
-  # y[!isna] = f(Y[!isna])
-  # y[isna] = mean(y[!isna])
-
-  y[] = apply(Y, 2, function (x) {
-    x[is.na(x)] = mean(x, na.rm = TRUE)
-    return (f(x))
-  })
-
-  # Initialize the parameters and sufficient statistics
-  # to NULL and zero, respectively
-  A = B = U = V = NULL
-  xtx = ztz = NULL
-  xty = zty = NULL
-  xb = az = uv = 0
-
-  # Compute the initial column-specific regression parameters (if any)
-  if (!is.null(X)) {
-    if (verbose) cat(" Initialization: column-specific covariates \n")
-    m = ncol(Y)
-    p = ncol(X)
-    B = matrix(NA, nrow = m, ncol = p)
-    xtx = crossprod(X)
-    xty = crossprod(X, y)
-    B[] = t(solve(xtx, xty))
-    xb = tcrossprod(X, B)
-  }
-
-  # Compute the initial row-specific regression parameter (if any)
-  if (!is.null(Z)) {
-    if (verbose) cat(" Initialization: row-specific covariates \n")
-    n = nrow(Y)
-    q = ncol(Z)
-    A = matrix(NA, nrow = n, ncol = q)
-    ztz = crossprod(Z)
-    zty = crossprod(Z, t(y - xb))
-    A[] = t(solve(ztz, zty))
-    az = tcrossprod(A, Z)
-  }
-
-  # Compute the initial latent factors via incomplete SVD
-  if (verbose) cat(" Initialization: latent scores and loadings \n")
-  # sv = svd::propack.svd(y - xb - az, neig = ncomp)
-  s = RSpectra::svds(y - xb - az, k = d, nu = d, nv = d)
-  if (d == 1) {
-    U = s$u %*% sqrt(s$d)
-    V = s$v %*% sqrt(s$d)
-  } else {
-    U = s$u %*% diag(sqrt(s$d))
-    V = s$v %*% diag(sqrt(s$d))
-  }
-  uv = tcrossprod(U, V)
-
-  # Refinement loop (it might be useful if there are many missing values)
-  if (niter > 0) {
-    if (verbose) cat(" Refinement: |")
-    for (iter in 1:niter) {
-
-      if (verbose) cat("=")
-
-      # Refine the initial matrix completion
-      y[isna] = xb[isna] + az[isna] + uv[isna]
-
-      # Refine the initial column-specific regression parameters (if any)
-      if (!is.null(X)) {
-        xty = crossprod(X, y - az - uv)
-        B[] = t(solve(xtx, xty))
-        xb = tcrossprod(X, B)
-      }
-
-      # Refine the initial row-specific regression parameter (if any)
-      if (!is.null(Z)) {
-        zty = crossprod(Z, t(y - xb - uv))
-        A[] = t(solve(ztz, zty))
-        az = tcrossprod(A, Z)
-      }
-
-      # Refine the initial latent factors via incomplete SV
-      # s = svd::propack.svd(y - xb - az, neig = d)
-      s = RSpectra::svds(y - xb - az, k = d, nu = d, nv = d)
-      if (d == 1) {
-        U = s$u * sqrt(s$d)
-        V = s$v * sqrt(s$d)
-      } else {
-        U = s$u %*% diag(sqrt(s$d))
-        V = s$v %*% diag(sqrt(s$d))
-      }
-      uv = tcrossprod(U, V)
-    }
-    if (verbose) cat("| \n")
-  }
-
-  # Compute the initial vector of dispersion parameters
-  mu = family$linkinv(xb + az + uv)
-  var = family$variance(mu)
-  phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
-
-  # Covariate matrices initialization when there are no covariates
-  if (is.null(X)) B = matrix(0, nrow = m, ncol = 0)
-  if (is.null(Z)) A = matrix(0, nrow = n, ncol = 0)
-
-  # Return the obtained initial values
-  list(U = U, V = V, A = A, B = B, phi = phi)
-}
-
-
-#' @title GLM-SVD initialization
-#'
-#' @description
-#' Initialize the parameters of a GMF model fitting a sequence of GLMs followed
-#' by a residual SVD decomposition. See \code{\link{init.param}} for more details.
-#'
-#' @import svd
-#'
-#' @keywords internal
-init.param.glm = function (
-    Y,
-    X = NULL,
-    Z = NULL,
-    ncomp = 2,
-    family = poisson(),
-    verbose = FALSE
-) {
-  # We still have to implement parallel computation for
-  # independent row- and column-specific calculations
-
-  n = nrow(Y)
-  m = ncol(Y)
-  d = ncomp
-
-  # Initialize the mean and variance matrices
-  eta = matrix(0, nrow = n, ncol = m)
-  mu = matrix(NA, nrow = n, ncol = m)
-  var = matrix(NA, nrow = n, ncol = m)
-
-  # column-specific covariate vector initialization
-  if (verbose) cat(" Initialization: column-specific covariates \n")
-  res = c()
-  B = c()
-  for (j in 1:m) {
-    yj = Y[,j]
-    mj = mean(yj, na.rm = TRUE)
-    naj = is.na(yj)
-
-    if (any(naj)) {
-      if (family$family == "binomial") {
-        yj[naj] = rbinom(n = sum(naj), size = 1, prob = mj)
-        yj = as.factor(yj)
-      } else {
-        yj[naj] = mj
-      }
-    }
-
-    if (is.null(X)) {
-      res = cbind(res, yj)
-    } else {
-      m = glm(yj ~ X - 1, family = family)
-      B = rbind(B, m$coefficients)
-      res = cbind(res, m$residuals)
-    }
-  }
-
-  # partial linear predictor
-  if (!is.null(X)) {
-    eta[] = eta + tcrossprod(X, B)
-  }
-
-  # row-specific covariate vector initialization
-  if (verbose) cat(" Initialization: row-specific covariates \n")
-  res = c()
-  A = c()
-  for (i in 1:n) {
-    yi = Y[i,]
-    mi = mean(yi, na.rm = TRUE)
-    nai = is.na(yi)
-
-    if (any(nai)) {
-      if (family$family == "binomial") {
-        yi[nai] = rbinom(n = sum(nai), size = 1, prob = mi)
-        yi = as.factor(yi)
-      } else {
-        yi[nai] = mi
-      }
-    }
-
-    if (is.null(Z)) {
-      res = rbind(res, yi)
-    } else {
-      m = glm(yi ~ Z - 1, family = family, offset = eta[i,])
-      A = rbind(A, m$coefficients)
-      res = rbind(res, m$residuals)
-    }
-  }
-
-  # partial linear predictor
-  if (!is.null(Z)) {
-    eta[] = eta + tcrossprod(A, Z)
-  }
-
-  # residual matrix factorization for initializing the latent components U * Vt
-  if (verbose) cat(" Initialization: latent scores and loadings \n")
-  s = svd(res, nu = d, nv = d)
-  U = s$u %*% diag(sqrt(s$d[1:d]))
-  V = s$v %*% diag(sqrt(s$d[1:d]))
-
-  # Compute the initial vector of dispersion parameters
-  # eta[] = eta + tcrossprod(U, V)
-  # if (!is.null(X)) eta = eta + tcrossprod(X, B)
-  # if (!is.null(Z)) eta = eta + tcrossprod(A, Z)
-  eta[] = eta + tcrossprod(U, V)
-  mu[] = family$linkinv(eta)
-  var[] = family$variance(mu)
-  phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
-
-  # covariate matrices initialization when there are no covariates
-  if (is.null(X)) B = matrix(0, nrow = ncol(Y), ncol = 0)
-  if (is.null(Z)) A = matrix(0, nrow = nrow(Y), ncol = 0)
-
-  # output
-  list(U = U, V = V, A = A, B = B, phi = phi)
-}
-
-
-#' @title SVD initialization
-#'
-#' @description
-#' Initialize the parameters of a GMF model using custom values provided by the user
-#' and estimating the unspecified parameters using the same procedure described in
-#' \code{\link{init.param.svd}}. See \code{\link{init.param}} for more details.
-#'
-#' @import svd
-#'
-#' @keywords internal
-init.param.custom = function (
-    Y,
-    X = NULL,
-    Z = NULL,
-    ncomp = 2,
-    family = poisson(),
+    family = gaussian(),
     values = list(),
     verbose = FALSE
 ) {
 
+  # Set the covariate matrices
+  if (is.null(X)) X = matrix(1, nrow = n, ncol = 1)
+  if (is.null(Z)) Z = matrix(1, nrow = n, ncol = 1)
+
   # Data dimensions
   n = nrow(Y)
   m = ncol(Y)
+  p = ncol(X)
+  q = ncol(Z)
   d = ncomp
 
-  # Select the data transformation to use for
-  # the initialization of the working data
-  f = set.jitter(family)
+  # Set the error message
+  error.message = function (mat, nr, nc)
+    gettextf("Incompatible dimensions: dim(%s) != c(%d, %d).", mat, nr, nc)
 
-  # Compute the transformed data and fill the NA values with the column means
-  if (verbose) cat(" Initialization: working data \n")
-  isna = is.na(Y)
-  y = matrix(NA, nrow = n, ncol = m)
-  y[] = apply(Y, 2, function (x) {
-    x[is.na(x)] = mean(x, na.rm = TRUE)
-    return (f(x))
-  })
-
-  # Initialize the parameters and sufficient statistics
-  A = B = U = V = NULL
-  xtx = ztz = NULL
-  xty = zty = NULL
-  xb = az = uv = 0
-
-  # Safety checks and parameter assignement
-  if (is.list(values)) {
-    if (check.dim(values$U, n, d)) U = values$U
-    if (check.dim(values$V, m, d)) V = values$V
-    if (check.dim(values$A, n, ncol(Z))) A = values$A
-    if (check.dim(values$B, m, ncol(X))) B = values$B
-    if (!is.null(U) & !is.null(V)) uv = tcrossprod(U, V)
-    if (!is.null(A) & !is.null(Z)) az = tcrossprod(A, Z)
-    if (!is.null(X) & !is.null(B)) xb = tcrossprod(X, B)
-
-  }
-
-  # Compute the initial column-specific regression parameters (if any)
-  if (!is.null(X)) {
-    if (is.null(B)) {
-      if (verbose) cat(" Initialization: column-specific covariates \n")
-      m = ncol(Y)
-      p = ncol(X)
-      B = matrix(NA, nrow = m, ncol = p)
-      xtx = crossprod(X)
-      xty = crossprod(X, y - az - uv)
-      B[] = t(solve(xtx, xty))
-    }
-    xb = tcrossprod(X, B)
-  }
-
-  # Compute the initial row-specific regression parameter (if any)
-  if (!is.null(Z)) {
-    if (is.null(A)) {
-      if (verbose) cat(" Initialization: row-specific covariates \n")
-      n = nrow(Y)
-      q = ncol(Z)
-      A = matrix(NA, nrow = m, ncol = q)
-      ztz = crossprod(Z)
-      zty = crossprod(Z, t(y - xb - uv))
-      A[] = t(solve(ztz, zty))
-    }
-    az = tcrossprod(A, Z)
-  }
-
-  # If both U and V are provided, orthogonalize them via incomplete SVD
-  if (!is.null(U) & !is.null(V)) {
-    uv = tcrossprod(U, V)
-    s = svd::propack.svd(uv, neig = d)
-    U = s$u %*% diag(sqrt(s$d))
-    V = s$v %*% diag(sqrt(s$d))
-  }
-
-  # If U is unspecified, compute it via penalized least squares
-  if (!is.null(U) & is.null(V)) {
-    if (verbose) cat(" Initialization: latent scores \n")
-    # Compute the unnormalized U via penalized least squares
-    vtv = crossprod(V) + diag(d)
-    vty = crossprod(V, t(y - xb - za))
-    U = t(solve(vtv, vty))
-    # Orthogonalize U and V via incomplete SVD
-    uv = tcrossprod(U, V)
-    s = svd::propack.svd(uv, neig = d)
-    U = s$u %*% diag(sqrt(s$d))
-    V = s$v %*% diag(sqrt(s$d))
-  }
-
-  # If V is unspecified, compute it via least squares
-  if (is.null(U) & !is.null(V)) {
-    if (verbose) cat(" Initialization: latent loadings \n")
-    # Compute the unnormalized V via penalized least squares
-    utu = crossprod(U)
-    uty = crossprod(U, t(y - xb - za))
-    V = t(solve(utu, uty))
-    # Orthogonalize U and V via incomplete SVD
-    uv = tcrossprod(U, V)
-    s = svd::propack.svd(uv, neig = d)
-    U = s$u %*% diag(sqrt(s$d))
-    V = s$v %*% diag(sqrt(s$d))
-  }
-
-  # If both U and V are unspecified, compute them via incomplete SVD
-  # calculated over the regression residuals
-  if (is.null(U) & is.null(V)) {
-    if (verbose) cat(" Initialization: latent scores and loadings \n")
-    s = svd::propack.svd(y - xb - az, neig = d)
-    U = s$u %*% diag(sqrt(s$d))
-    V = s$v %*% diag(sqrt(s$d))
-    uv = tcrossprod(U, V)
-  }
+  # Check if all the dimensions are compatible
+  if (any(dim(values$B) != c(m, p))) stop(error.message("B", m, p), call. = FALSE)
+  if (any(dim(values$A) != c(n, q))) stop(error.message("A", n, q), call. = FALSE)
+  if (any(dim(values$U) != c(n, d))) stop(error.message("U", n, d), call. = FALSE)
+  if (any(dim(values$V) != c(m, d))) stop(error.message("V", m, d), call. = FALSE)
 
   # Compute the initial vector of dispersion parameters
-  mu = family$linkinv(xb + az + uv)
+  eta = tcrossprod(cbind(X, values$A, values$U), cbind(values$B, Z, values$V))
+  mu = family$linkinv(eta)
   var = family$variance(mu)
-  phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
-
-  # Regression matrices initialization when there are no covariates
-  if (is.null(X)) B = matrix(0, nrow = m, ncol = 0)
-  if (is.null(Z)) A = matrix(0, nrow = n, ncol = 0)
+  values$phi = colMeans((Y - mu)^2 / var, na.rm = TRUE)
 
   # Return the obtained initial values
-  list(U = U, V = V, A = A, B = B, phi = phi)
+  return(values)
 }
-

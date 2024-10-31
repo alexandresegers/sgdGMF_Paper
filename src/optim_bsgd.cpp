@@ -21,7 +21,6 @@ void BSGD::summary () {
     std::printf(" damping = %.5f \n", this->damping);
     std::printf(" rate1 = %.5f \n", this->rate1);
     std::printf(" rate2 = %.5f \n", this->rate2);
-    std::printf(" parallel = %s \n", this->parallel ? "true" : "false");
     std::printf(" verbose = %s \n", this->verbose ? "true" : "false");
     std::printf(" frequency = %i \n", this->frequency);
     std::printf(" progress = %s \n", this->progress ? "true" : "false");
@@ -156,13 +155,13 @@ Rcpp::List BSGD::fit (
     const int & ncomp, const arma::vec & lambda
 ) {
     /*
-    In this implementation we divide the dataset in chunks subsampling both the 
-    rows and the columns, obtainig a rectangular tassellization of the original 
-    data matrix. At each iteration of the algorthm, we pick a particular chunk
+    In this implementation, we divide the dataset into chunks, subsampling both the 
+    rows and the columns. By doing this, we obtain a rectangular tassellization of the  
+    original data matrix. At each iteration of the algorthm, we pick a particular chunk
     and we update only the rows of u (score matrix) and the columns of v (loading matrix) 
-    corresponding to that chunk
+    corresponding to that chunk.
     This may require many iterations of the algorithm to complete one epoch, where
-    one epoch correspond to a complete scan of the data matrix.
+    one epoch corresponds to a complete scan of the data matrix.
     */
 
 
@@ -460,10 +459,14 @@ Rcpp::List BSGD::fit2 (
     this->init_phi(phi, df, Y, mu, family);
 
     // Get the initial deviance, penalty and objective function
-    double dev, pen, obj, objt, change, scanned;
+    double dev, pen, obj;
+    double devt, objt;
+    double change, scanned;
     dev = arma::accu(deviance(Y, mu, family));
     pen = penalty(u, penu) + penalty(v, penv);
-    obj = dev + 0.5 * pen; objt = obj;
+    obj = dev + 0.5 * pen;
+    devt = dev;
+    objt = obj;
     change = INFINITY;
     scanned = 0;
 
@@ -534,12 +537,17 @@ Rcpp::List BSGD::fit2 (
         }
 
         if (iter % frequency == 0) {
-            // Update the deviance, penalty and objective functions
+            // Update the deviance, penalty and objective function
             dev = arma::accu(deviance(Y, mu, family));
-            pen = penalty(u, penu) + penalty(v, penv);
-            objt = obj; obj = dev + 0.5 * pen;
+            pen = penalty(ut, penu) + penalty(vt, penv);
+            // objt = obj; 
+            obj = dev + 0.5 * pen;
             change = std::abs(obj - objt) / (std::abs(objt) + 1e-04);
             scanned = (iter * this->size1) / n;
+
+            // Save the current values of the daviance, penalty and objective function
+            devt = dev;
+            objt = obj;
 
             // Get the current execution time
             end = clock();
@@ -558,6 +566,10 @@ Rcpp::List BSGD::fit2 (
         if (change < this->tol) {break;}
     }
 
+    // Save the final deviance, penalty and objective function
+    devt = dev;
+    objt = obj;
+
     // Get the estimated predictions and variances
     eta = get_eta(u, v, etalo, etaup);
     mu = family->linkinv(eta);
@@ -574,7 +586,7 @@ Rcpp::List BSGD::fit2 (
 
     if (this->verbose) {
         scanned = (this->maxiter * this->size1) / n;
-        print_state(iter, dev / nm, change, time, scanned);
+        print_state(iter, devt / nm, change, time, scanned);
         std::printf("------------------------------------------------------\n");
     }
     

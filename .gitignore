@@ -14,3 +14,5 @@ Benchmarking/Arigoni/*.html*
 Benchmarking/CaseStudy/*.txt*
 Benchmarking/CaseStudy/*.html*
 Benchmarking/CaseStudy/Output_files/*.RDS
+Benchmarking/Arigoni/sgdGMF-fitting-2-clusters-500hvg*
+Benchmarking/Arigoni/sgdGMF-fitting-different-hvg*

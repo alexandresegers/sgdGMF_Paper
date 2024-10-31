@@ -38,7 +38,8 @@ Y[] = t(counts)
 
 
 family = poisson()
-method = "bsgd"
+method = "sgd"
+sampling = "sampling"
 control = list("parallel" = TRUE, "nthreads" = 8)
 
 gmf.fit.list = list()
@@ -50,7 +51,8 @@ for (i in 1:length(ncomp)) {
   cat(" Rank =", ncomp[i], "\n")
   # Fit the model
   fit = sgdGMF::sgdgmf.fit(Y, X, Z, ncomp = ncomp[i], family = family,
-                           method = method, control.init = control.init, 
+                           method = method, sampling = sampling, 
+                           control.init = control.init, 
                            control.alg = control.alg)
   saveRDS(object = fit, file = paste0("Output_models/sgdGMF-B-SGD-fit-", ncomp[i], ".RDS"))
   

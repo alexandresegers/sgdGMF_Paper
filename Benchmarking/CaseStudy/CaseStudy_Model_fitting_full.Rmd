@@ -31,12 +31,14 @@ X <- model.matrix(~1, colData(tenx_filtered))
 ```{r}
 set.seed(100)
 family = poisson()
-method = "bsgd"
+method = "sgd"
+sampling = "block"
 control = list(maxiter = 10000, size = c(1000,250))
 
 t0 <- Sys.time()
 fit <- sgdGMF::sgdgmf.fit(Y, X, ncomp = 10, family = family,
-                          method = method, control.alg = control,
+                          method = method, sampling = sampling, 
+                          control.alg = control,
                           control.init = list(method = "ols", type = "link"))
 t1 <- Sys.time()
 time <- t1 - t0  

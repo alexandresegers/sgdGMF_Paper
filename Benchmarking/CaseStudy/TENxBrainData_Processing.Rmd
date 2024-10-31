@@ -63,7 +63,7 @@ tenx
 
 Next, we remove the lowly expressed genes. Here, 
 we keep only those genes that have at least 1 UMI 
-in at least 5% of the data. These threshold are
+in at least 1% of the data. These threshold are
 dataset-specific and may need to be taylored to 
 specific applications.
 
