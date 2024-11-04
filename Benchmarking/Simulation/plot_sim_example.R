@@ -12,7 +12,7 @@ theme_set(theme_bw())
 
 ## GLOBAL VARIABLES ----
 SETTING = 1
-SAVE = FALSE
+SAVE = TRUE
 SHOW = TRUE
 RUN = FALSE
 
@@ -282,10 +282,8 @@ meta = metadata(sim)
 groups = as.numeric(as.factor(cells$Group))
 batches = as.numeric(as.factor(cells$Batch))
 
-# PCA embedding
+# PCA and t-SNE embedding
 pca = RSpectra::svds(scale(t(as.matrix(logcounts))), k = 10)$u
-
-# t-SNE embedding
 tsne = Rtsne::Rtsne(pca, dims = 2, verbose = TRUE, num_threads = 8)$Y
 
 df = data.frame(
@@ -361,13 +359,6 @@ plt.tsne = plot.tsne.grid(list.tsne, by = 5)
 
 if (SHOW) print(plt.tsne)
 
-if (SAVE) {
-  filename = paste("simulation_example_tsne.pdf", sep = "")
-  path = IMGPATH; width = 1.4; height = 1.6; zoom = 14
-  ggsave(filename = filename, plot = plt.tsne, path = path,
-         width = zoom * width, height = zoom * height, units = "cm")
-}
-
 ## SILHOUETTE SCORES ----
 list.sil = list()
 if (.CMF) list.sil$cmf = list(model = "CMF (cmfrec)", sil = cluster::silhouette(groups, dist(model.cmf$tsne)))
@@ -385,13 +376,6 @@ if (.SGD) list.sil$sgd = list(model = "SGD (sgdGMF)", sil = cluster::silhouette(
 plt.sil = plot.sil.grid(list.sil, by = 5)
 
 if (SHOW) print(plt.sil)
-
-if (SAVE) {
-  filename = paste("simulation_example_silhouette.pdf", sep = "")
-  path = IMGPATH; width = 1.4; height = 1.6; zoom = 14;
-  ggsave(filename = filename, plot = plt.sil, path = path,
-         width = zoom * width, height = zoom * height, units = "cm")
-}
 
 ## LOAD SUMMARY STATS ----
 plt.stat = plot.summary(n = 5000, m = 500, d = 5, i = 100)
