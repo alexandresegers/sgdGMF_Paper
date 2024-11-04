@@ -5,20 +5,41 @@
 rm(list = ls())
 graphics.off()
 
-## Load the package
-devtools::load_all()
-
 ## Load the utility functions
-source("sim/utilities.R")
+source("Benchmarking/Simulation/utilities.R")
 
 theme_set(theme_bw())
 
 ## GLOBAL VARIABLES ----
 SETTING = 1
-SAVE = TRUE
+SAVE = FALSE
 SHOW = TRUE
+RUN = FALSE
 
-colors = c("#F8766D", "#619CFF", "#00BA38", "#ff9933", "#d97ff2")
+# Import the sgdGMF package (only if you want to run the algorithms)
+if (RUN) devtools::load_all()
+
+# choose the method to be shown in the plots
+.PEARSON = FALSE
+.DEVIANCE = FALSE
+.GLMPCA = TRUE
+.AVAGRAD = TRUE
+.FISHER = TRUE
+.NBWAVE = TRUE
+.CMF = TRUE
+.NMF = TRUE
+.NNLM = TRUE
+.AIRWLS = TRUE
+.NEWTON = TRUE
+.SGD = TRUE
+
+# set the path where to find the data
+FILEPATH = paste("Benchmarking", "Simulation", "data", sep = "/")
+IMGPATH = paste("Benchmarking", "Simulation", "img", sep = "/")
+
+# set the custom colors for the clusters
+myggcol = c("#F8766D", "#619CFF", "#00BA38", "#ff9933", "#d97ff2")
+seaborn = c("#ff7c04", "#387cbc", "#e81c1c", "#50ac4c", "#a04ca4")
 
 ## PLOTTING FUNCTIONS ----
 plot.tsne.grid = function (tsne, by = 1) {
@@ -52,10 +73,14 @@ plot.tsne.grid = function (tsne, by = 1) {
   levels(df$group) = 1:length(unique(df$group))
   levels(df$batch) = 1:length(unique(df$batch))
 
-  colors = c("#ff7c04", "#387cbc", "#e81c1c", "#50ac4c", "#a04ca4")
+  gg_color_hue = function(n) {
+    hues = seq(15, 375, length = n + 1)
+    hcl(h = hues, l = 65, c = 100)[1:n]
+  }
+
   plt = ggplot(data = df, mapping = aes(x = x, y = y, color = group, pch = batch)) +
-    geom_point(alpha = 0.8, size = 2) + facet_wrap(vars(model)) +
-    labs(color = "Cell-type", pch = "Batch") +
+    geom_point(alpha = 0.8, size = 1.5) + facet_wrap(vars(model)) +
+    labs(color = "Celltype", pch = "Batch") +
     scale_color_brewer(palette = "Set2") +
     # scale_colour_manual(values = colors) +
     # scale_fill_manual(values = colors) +
@@ -65,6 +90,8 @@ plot.tsne.grid = function (tsne, by = 1) {
           legend.text = element_text(size = 10),
           plot.title = element_text(size = 13),
           strip.text = element_text(size = 13),
+          strip.background = element_rect(color = "white"),
+          panel.grid = element_blank(),
           axis.title = element_blank())
 
 #    theme(text = element_text(size = 20),
@@ -73,16 +100,6 @@ plot.tsne.grid = function (tsne, by = 1) {
 #          legend.title = element_text(size = 15),
 #          axis.title = element_blank(),
 #          axis.text = element_blank())
-
-  if (SAVE) {
-    filename = paste("example_sbubble_n5000_m500_d5_i25.pdf", sep = "")
-    path = "img/splatter"
-    width = 1
-    height = 1
-    zoom = 8
-    ggsave(filename = filename, plot = plt, path = path,
-           width = zoom * width, height = zoom * height, units = "cm")
-  }
 
   return (plt)
 }
@@ -143,7 +160,8 @@ plot.sil.grid = function (sil, by = 1) {
     scale_color_brewer(palette = "Set2") +
     scale_fill_brewer(palette = "Set2") +
     labs(x = "Cell index", y = "Silhouette width") +
-    labs(color = "Cell-type", fill = "Cell-type")
+    labs(color = "Cell-type", fill = "Cell-type") +
+    theme(strip.background = element_blank())
 
 
   plt = plt + geom_text(
@@ -166,59 +184,94 @@ plot.sil.grid = function (sil, by = 1) {
 load.data = function (n, m, d, i) {
 
   setting = "bubble"
-  file.path = paste("data", "bubble", sep = "/")
-  file.id = paste("_s", setting, "_n", n, "_m", m, "_d", d, "_i", i, sep = "")
-  file.name = paste("summary", file.id, ".csv", sep = "")
+  filepath = FILEPATH
+  fileid = paste("_s", setting, "_n", n, "_m", m, "_d", d, "_i", i, sep = "")
+  filename = paste("summary", fileid, ".csv", sep = "")
 
-  df = read.table(file = paste(file.path, file.name, sep = "/"),
+  df = read.table(file = paste(filepath, filename, sep = "/"),
                   header = TRUE, dec = ".", sep = ";")
-
-  models = c("CMF", "NMF", "NMF+", "AvaGrad", "Fisher", "NBWaVE", "AIRWLS", "Newton", "SGD")
-  df$model = factor(df$model, levels = models)
 
   return (df)
 }
 
-plot.stat.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
+filter.data = function (df, n, m, d, i) {
+
+  # Filter out unused rows
+  df = df[-which(df$Set != "Test"), ]
+  df = df[-which(df$Model == "C-SGD"), ]
+
+  # Create new variables
+  df = df %>% mutate(Dim = n/100, NComp = d)
+
+  # Rename and sort the variables
+  df = data.frame(
+    iteration = df$Iter,
+    model = df$Model,
+    dimension = df$Dim,
+    ncomp = df$NComp,
+    time = df$Time,
+    error = df$RSS,
+    deviance = df$Dev,
+    silhouette = df$Sil,
+    purity = df$Purity)
+
+  # Rename some model labels
+  df$model[df$model == "NNLM"] = "NMF+"
+  df$model[df$model == "B-SGD"] = "SGD"
+
+  # Transform model into a factor variable
+  models = c("CMF", "NMF", "NMF+", "AvaGrad", "Fisher", "NBWaVE", "AIRWLS", "Newton", "SGD")
+  df$model = factor(df$model, levels = models)
+
+  return(df)
+}
+
+plot.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
 
   require(ggh4x)
   require(ggbreak)
 
-  df = load.data(n = 5000, m = 500, d = 5, i = 25)
+  df = load.data(n, m, d, i)
+  df = filter.data(df, n, m, d, i)
   df = df[, -which(colnames(df) %in% c("iteration", "dimension", "ncomp"))]
   df$deviance = 100 * df$deviance
   df$error = 100 * df$error
+  df = df[, -which(colnames(df) == "error")]
 
   df2 = reshape2::melt(df, id.var = "model")
 
-  df2$variable = factor(df2$variable, levels = c("time", "deviance", "error", "silhouette"))
-  levels(df2$variable) = c("Time", "Deviance", "Error", "Silhouette")
+  df2$variable = factor(df2$variable, levels = c("time", "deviance", "silhouette", "purity"))
+  levels(df2$variable) = c("Time", "Deviance", "Silhouette", "Purity")
 
   scales <- list(
-    scale_y_continuous(limits = c(0, 125)),
+    scale_y_continuous(limits = range(df$time[df$model != "AvaGrad"], na.rm = TRUE)),
     scale_y_continuous(limits = range(df$deviance)),
-    scale_y_continuous(limits = range(df$error)),
-    scale_y_continuous(limits = range(df$silhouette))
+    scale_y_continuous(limits = range(df$silhouette)),
+    scale_y_continuous(limits = range(df$purity))
   )
 
-  title = join.string("n = ", 5000, ", m = ", 500, ", d = ", 5)
-
-  plt = ggplot(data = df2, map = aes(x = model, y = value, color = model, fill = model)) +
-    geom_boxplot(alpha = 0.5) + facet_grid(rows = vars(variable), scales = "free_y") +
+  title = join.string("n = ", n, ", m = ", m, ", d = ", d)
+  palette = "Temps"
+  colors = hcl.colors(9, palette = "Temps")
+  plt = ggplot(data = df2, map = aes(x = model, y = value, color = model)) +
+    geom_boxplot(map = aes(fill = model), alpha = 0.5) +
+    geom_boxplot(alpha = 0.5) +
+    facet_grid(rows = vars(variable), scales = "free_y") +
     facetted_pos_scales(y = scales) + ggtitle(title) +
+    # scale_colour_manual(values = colors) + scale_fill_manual(values = colors) +
+    # scale_color_brewer(palette = palette) + scale_fill_brewer(palette = palette) +
     theme(axis.title = element_blank(), axis.text.y = element_text(size = 10),
           axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1),
-          strip.text = element_text(size = 13), plot.title = element_text(size = 13),
-          legend.title = element_text(size = 13), legend.text = element_text(size = 10),
-          legend.position = "none")
+          strip.text = element_text(size = 13), strip.background = element_rect(color = "white"), # element_blank(),
+          plot.title = element_text(size = 13), legend.position = "none",
+          legend.title = element_text(size = 13), legend.text = element_text(size = 10))
 
   return (plt)
 }
 
 ## LOAD DATA ----
-file.name = "example_sbubble_n5000_m500_d5_i25.RData"
-file.path = join.path("data", "splatter", file.name)
-load(file = file.path)
+filename = "example_sbubble_n5000_m500_d5_i25.RData"
+load(file = paste(FILEPATH, filename, sep = "/"))
 
 ## DATA EXTRACTION ----
 logcounts = as.data.frame(logcounts(sim))
@@ -246,7 +299,8 @@ df = data.frame(
 ggplot(data = df, map = aes(x = x, y = y, color = group, pch = batch)) +
   geom_point(alpha = 0.99) + facet_grid(cols = vars(embedding)) +
   scale_color_brewer(palette = "Set2") +
-  labs(x = "PC1", y = "PC2", color = "Cell-type", pch = "Batch")
+  labs(x = "PC1", y = "PC2", color = "Cell-type", pch = "Batch") +
+  theme(strip.background = element_blank())
 
 ## TRAIN-TEST SPLIT ----
 X = model.matrix(~ Batch, data = cells)
@@ -263,60 +317,95 @@ train[data$train] = NA
 ctrain = naive.completion(train)
 
 ## MODEL FIT ----
-model.pearson = fit.pearson(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family)
-model.glmpca = fit.glmpca(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-05)
-model.nbwave = fit.nbwave(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-04)
-model.sgd = fit.C.bsgd(y = train, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 2000, stepsize = 0.01)
+
+if (RUN) {
+  model.pearson = fit.pearson(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family)
+  model.deviance = fit.deviance(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family)
+  model.avagrad = fit.avagrad(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 1000, tol = 1e-04)
+  model.fisher = fit.fisher(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-05)
+  model.nbwave = fit.nbwave(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-04)
+  model.cmf = fit.cmf(y = train, x = X, z = NULL, ncomp = ncomp, family = family, verbose = FALSE, maxiter = 500)
+  model.nmf = fit.nmf(y = ctrain, x = NULL, z = NULL, ncomp = ncomp, family = family, verbose = TRUE)
+  model.nnlm = fit.nnlm(y = train, x = NULL, z = NULL, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 2000)
+  model.airwls = fit.C.airwls(y = train, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, stepsize = 0.9)
+  model.newton = fit.C.newton(y = train, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, stepsize = 0.2)
+  model.sgd = fit.C.bsgd(y = train, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 2000, stepsize = 0.01)
+
+  filename = "models_sbubble_n5000_m500_d5_i25.RData"
+  save(model.pearson, model.deviance, model.glmpca, model.avagrad,
+       model.fisher, model.nbwave, model.cmf, model.nmf, model.nnlm,
+       model.airwls, model.newton, model.sgd,
+       file = paste(FILEPATH, filename, sep = "/"))
+} else {
+  filename = "models_sbubble_n5000_m500_d5_i25.RData"
+  load(file = paste(FILEPATH, filename, sep = "/"))
+}
+
+
 
 ## TSNE PROJECTION ----
-plt.tsne = plot.tsne.grid(list(
-  list(model = "Pearson", tsne = model.pearson$tsne, group = groups, batch = batches),
-  list(model = "glmPCA", tsne = model.glmpca$tsne, group = groups, batch = batches),
-  list(model = "NBWaVE", tsne = model.nbwave$tsne, group = groups, batch = batches),
-  list(model = "SGD", tsne = model.sgd$tsne, group = groups, batch = batches)
-), by = 5)
+list.tsne = list()
+if (.CMF) list.tsne$cmf = list(model = "CMF (cmfrec)", tsne = model.cmf$tsne, group = groups, batch = batches)
+if (.NMF) list.tsne$nmf = list(model = "NMF (NMF)", tsne = model.nmf$tsne, group = groups, batch = batches)
+if (.NNLM) list.tsne$nnlm = list(model = "NMF+ (NNLM)", tsne = model.nnlm$tsne, group = groups, batch = batches)
+if (.PEARSON) list.tsne$pearson = list(model = "Pearson", tsne = model.pearson$tsne, group = groups, batch = batches)
+if (.DEVIANCE) list.tsne$deviance = list(model = "Deviance", tsne = model.deviance$tsne, group = groups, batch = batches)
+if (.AVAGRAD) list.tsne$avagrad = list(model = "AvaGrad (glmPCA)", tsne = model.avagrad$tsne, group = groups, batch = batches)
+if (.FISHER) list.tsne$fisher = list(model = "Fisher (glmPCA)", tsne = model.fisher$tsne, group = groups, batch = batches)
+if (.NBWAVE) list.tsne$nbwave = list(model = "NBWaVE (NewWave)", tsne = model.nbwave$tsne, group = groups, batch = batches)
+if (.AIRWLS) list.tsne$airwls = list(model = "AIRWLS (sgdGMF)", tsne = model.airwls$tsne, group = groups, batch = batches)
+if (.NEWTON) list.tsne$newton = list(model = "Newton (sgdGMF)", tsne = model.newton$tsne, group = groups, batch = batches)
+if (.SGD) list.tsne$sgd = list(model = "SGD (sgdGMF)", tsne = model.sgd$tsne, group = groups, batch = batches)
 
-if (SHOW) {
-  print(plt.tsne)
+plt.tsne = plot.tsne.grid(list.tsne, by = 5)
+
+if (SHOW) print(plt.tsne)
+
+if (SAVE) {
+  filename = paste("simulation_example_tsne.pdf", sep = "")
+  path = IMGPATH; width = 1.4; height = 1.6; zoom = 14
+  ggsave(filename = filename, plot = plt.tsne, path = path,
+         width = zoom * width, height = zoom * height, units = "cm")
 }
 
 ## SILHOUETTE SCORES ----
-sil.pearson = cluster::silhouette(groups, dist(model.pearson$tsne))
-sil.glmpca = cluster::silhouette(groups, dist(model.glmpca$tsne))
-sil.nbwave = cluster::silhouette(groups, dist(model.nbwave$tsne))
-sil.sgd = cluster::silhouette(groups, dist(model.sgd$tsne))
+list.sil = list()
+if (.CMF) list.sil$cmf = list(model = "CMF (cmfrec)", sil = cluster::silhouette(groups, dist(model.cmf$tsne)))
+if (.NMF) list.sil$nmf = list(model = "NMF (NMF)", sil = cluster::silhouette(groups, dist(model.nmf$tsne)))
+if (.NNLM) list.sil$nnlm = list(model = "NMF+ (NNLM)", sil = cluster::silhouette(groups, dist(model.nnlm$tsne)))
+if (.PEARSON) list.sil$pearson = list(model = "Pearson", sil = cluster::silhouette(groups, dist(model.pearson$tsne)))
+if (.DEVIANCE) list.sil$deviance = list(model = "Deviance", sil = cluster::silhouette(groups, dist(model.deviance$tsne)))
+if (.GLMPCA) list.sil$avagrad = list(model = "AvaGrad (glmPCA)", sil = cluster::silhouette(groups, dist(model.avagrad$tsne)))
+if (.GLMPCA) list.sil$fisher = list(model = "Fisher (glmPCA)", sil = cluster::silhouette(groups, dist(model.fisher$tsne)))
+if (.NBWAVE) list.sil$nbwave = list(model = "NBWaVE (NewWave)", sil = cluster::silhouette(groups, dist(model.nbwave$tsne)))
+if (.AIRWLS) list.sil$airwls = list(model = "AIRWLS (sgdGMF)", sil = cluster::silhouette(groups, dist(model.airwls$tsne)))
+if (.NEWTON) list.sil$newton = list(model = "Newton (sgdGMF)", sil = cluster::silhouette(groups, dist(model.newton$tsne)))
+if (.SGD) list.sil$sgd = list(model = "SGD (sgdGMF)", sil = cluster::silhouette(groups, dist(model.sgd$tsne)))
 
-plt.sil = plot.sil.grid(list(
-  list(model = "Pearson", sil = sil.pearson),
-  list(model = "glmPCA", sil = sil.glmpca),
-  list(model = "NBWaVE", sil = sil.nbwave),
-  list(model = "SGD", sil = sil.sgd)
-), by = 5)
+plt.sil = plot.sil.grid(list.sil, by = 5)
 
-if (SHOW) {
-  print(plt.sil)
+if (SHOW) print(plt.sil)
+
+if (SAVE) {
+  filename = paste("simulation_example_silhouette.pdf", sep = "")
+  path = IMGPATH; width = 1.4; height = 1.6; zoom = 14;
+  ggsave(filename = filename, plot = plt.sil, path = path,
+         width = zoom * width, height = zoom * height, units = "cm")
 }
 
 ## LOAD SUMMARY STATS ----
-df = load.data(n = 5000, m = 500, d = 5, i = 25)
-
-plt.stat = plot.stat.summary()
+plt.stat = plot.summary(n = 5000, m = 500, d = 5, i = 100)
 
 plt = ggpubr::ggarrange(
   plt.stat + ggtitle("Summary statistics"),
-  plt.tsne + ggtitle("tSNE projection"),
-  nrow = 1, ncol = 2, widths = c(1,2))
+  plt.tsne + ggtitle(" tSNE projections"),
+  nrow = 1, ncol = 2, widths = c(1,2), labels = "AUTO")
 
-if (SHOW) {
-  print(plt)
-}
+if (SHOW) print(plt)
 
 if (SAVE) {
-  filename = paste("example_sbubble_n5000_m500_d5_i25.pdf", sep = "")
-  path = "img/splatter"
-  width = 2
-  height = 1.25
-  zoom = 14
+  filename = paste("simulation_example.pdf", sep = "")
+  path = IMGPATH; width = 2; height = 1.6; zoom = 14
   ggsave(filename = filename, plot = plt, path = path,
          width = zoom * width, height = zoom * height, units = "cm")
 }
