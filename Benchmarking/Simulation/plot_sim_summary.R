@@ -22,23 +22,8 @@ SHOW = TRUE
 FILEPATH = paste("Benchmarking", "Simulation", "data", sep = "/")
 IMGPATH = paste("Benchmarking", "Simulation", "img", sep = "/")
 
+# Color palette
 COLORS = hcl(h = seq(15, 375, length = 10), l = 65, c = 100)[1:9]
-# COLORS = hcl.colors(9, palette = "Temps")
-
-# c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c",
-#   "#fdbf6f" ,"#ff7f00", "#cab2d6", "#6a3d9a", "#ffff99", "#b15928")
-# c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6")
-# c("#fee8c8", "#fdbb84", "#e34a33")
-# c("#ece7f2", "#a6bddb", "#2b8cbe")
-# c("#e5f5f9", "#99d8c9", "#2ca25f")
-# c("#fff7bc", "#fec44f", "#d95f0e")
-# c("#fde0dd", "#fa9fb5", "#c51b8a")
-# c("#efedf5", "#bcbddc", "#756bb1")
-
-
-
-
-
 
 ## UTILITY FUNCTIONS ----
 
