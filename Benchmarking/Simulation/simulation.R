@@ -7,7 +7,7 @@ graphics.off()
 
 ## Load our functions
 devtools::load_all()
-source("sim/utilities.R")
+source("Benchmarking/Simulation/utilities.R")
 
 ## DATA SIMULATION ----
 
@@ -222,36 +222,36 @@ main = function (
 
 RUN = FALSE
 
-if (RUN) main(niter = 25, setting = 1, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
 
-if (RUN) main(niter = 25, setting = 2, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
 
-if (RUN) main(niter = 25, setting = 3, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 *  100, ncol =  100, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 *  250, ncol =  250, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 *  500, ncol =  500, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 *  750, ncol =  750, ncomp = 5, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 * 1000, ncol = 1000, ncomp = 5, write = TRUE)
 
-if (RUN) main(niter = 25, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
-if (RUN) main(niter = 25, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
+if (RUN) main(niter = 100, setting = 1, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
 
-if (RUN) main(niter = 25, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
-if (RUN) main(niter = 25, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
+if (RUN) main(niter = 100, setting = 2, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
 
-if (RUN) main(niter = 25, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
-if (RUN) main(niter = 25, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 10, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 15, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 20, write = TRUE)
+if (RUN) main(niter = 100, setting = 3, nrows = 10 * 500, ncol = 500, ncomp = 25, write = TRUE)
 
