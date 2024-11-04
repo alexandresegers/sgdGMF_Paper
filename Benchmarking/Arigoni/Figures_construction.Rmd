@@ -128,7 +128,8 @@ print(plt_purity)
 # Summary
 plt_gof = ggpubr::ggarrange(plt_eigs, plt_dev, plt_purity,
                             nrow = 3, ncol = 1, align = "v",
-                            heights = c(1,3,2))
+                            heights = c(1,3,2), labels = c("A", "", "B"), hjust = -0.5, vjust = 0.7)
+
 
 plt_gof = ggpubr::annotate_figure(plt_gof, top = text_grob("Model selection measures", size = 14))
 
@@ -272,7 +273,7 @@ plt_grid = ggpubr::ggarrange(
                     nrow = 4, align = "hv", heights = c(2,0.05,1, 0.1)),
   ggpubr::ggarrange(NULL, lgnd_tsne_true, lgnd_tsne_clust, NULL,
                     nrow = 4, align = "hv", heights = c(.5,1,1,.5)),
-  nrow = 1, ncol = 2, widths = c(10,2)
+  nrow = 1, ncol = 2, widths = c(10,2), labels = c("C", NULL)
 )
 
 print(plt_grid)
