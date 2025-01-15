@@ -1,9 +1,13 @@
-# sgdGMF
-An R package for efficient estimation of generalized matrix factorization models [[1,2,3]](#1,#2,#3) via alternated iterative least squares, quasi-Newton and stochastic gradient descent algorithms.
+# sgdGMF_Paper
+sgdGMF is an R package for efficient estimation of generalized matrix factorization (GMF) models [[1,2,3]](#1,#2,#3).
+The package implments the adaptive stochastic gradient descent with block- and coordinate-wise subsampling strategies proposed in [[4]](#4).
+Additionally, sgdGMF implements the alternated iterative re-weighted least squares [[1,3]](#1,#3) and diagonal-Hessian quasi-Newton [[1]](#1) algorithms. The package is available at [https://github.com/CristianCastiglione/sgdGMF]. 
 
+This repository contains a copy of the package and all code required to replicate the results in [[4]].
 
+## Simulation benchmarks
 
-# Arigoni benchmarks
+## Arigoni benchmarks
 
 To reproduce the results of the Arigoni dataset, one should do the following steps:
 
@@ -19,7 +23,7 @@ Run the following R-scripts:
 - Benchmarking/Arigoni/Figures_construction.R
 
 
-# CaseStudy benchmarks
+## CaseStudy benchmarks
 To reproduce the results of the CaseStudy, one should do the following steps:
 Run the following R-scripts:
 - TENxBrainData_Processing.R
@@ -50,4 +54,9 @@ Journal of Machine Learning Research, 23(291): 1--29.
 Wang, L., Carvalho, L. (2023).
 Deviance matrix factorization.
 Electronic Journal of Statistics, 17(2): 3762--3810.
+
+<a id="4">[4]</a>
+Castiglione, C., Segers, A., Clement, L, Risso, D. (2024).
+Stochastic gradient descent estimation of generalized matrix factorization models with application to single-cell RNA sequencing data.
+arXiv preprint: arXiv:2412.20509.
 
