@@ -27,6 +27,7 @@ Run the following R-scripts at Benchmarking/Arigoni/:
 
 ## CaseStudy benchmarks
 To reproduce the results of the CaseStudy, one should do the following steps:
+
 Run the following R-scripts at Benchmarking/CaseStudy/:
 - TENxBrainData_Processing.R
 - High_variable_genes.R
