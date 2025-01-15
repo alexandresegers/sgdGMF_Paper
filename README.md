@@ -1,9 +1,9 @@
 # sgdGMF_Paper
 sgdGMF is an R package for efficient estimation of generalized matrix factorization (GMF) models [[1,2,3]](#1,#2,#3).
 The package implments the adaptive stochastic gradient descent with block- and coordinate-wise subsampling strategies proposed in [[4]](#4).
-Additionally, sgdGMF implements the alternated iterative re-weighted least squares [[1,3]](#1,#3) and diagonal-Hessian quasi-Newton [[1]](#1) algorithms. The package is available at [https://github.com/CristianCastiglione/sgdGMF]. 
+Additionally, sgdGMF implements the alternated iterative re-weighted least squares [[1,3]](#1,#3) and diagonal-Hessian quasi-Newton [[1]](#1) algorithms. The package is available at https://github.com/CristianCastiglione/sgdGMF. 
 
-This repository contains a copy of the package and all code required to replicate the results in [[4]].
+This repository contains a copy of the package and all code required to replicate the results in [[4]](#4).
 
 ## Simulation benchmarks
 
