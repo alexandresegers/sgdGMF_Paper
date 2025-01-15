@@ -14,18 +14,20 @@ To reproduce the results of the Arigoni dataset, one should do the following ste
 - Download the raw data at: https://figshare.com/articles/dataset/BE1_10XGenomics_count_matrices/23939481/1?file=42312711
 - Put all the respective files of each cell-type in Benchmarking/Arigoni/Data/BE1/raw
 
-Run the following R-scripts:
-- Benchmarking/Arigoni/preprocessing.R
-- Benchmarking/Arigoni/Data_preparation.R
-- Benchmarking/Arigoni/Eigenvalues_model_selection.R
-- Benchmarking/Arigoni/sgdGMF-cv.R, Benchmarking/Arigoni/sgdGMF-fitting.R
-- Benchmarking/Arigoni/NewWave_comparison.R, Benchmarking/Arigoni/Figure_preparation.R
-- Benchmarking/Arigoni/Figures_construction.R
+Run the following R-scripts at Benchmarking/Arigoni/:
+- preprocessing.R
+- Data_preparation.R
+- Eigenvalues_model_selection.R
+- sgdGMF-cv.R
+- sgdGMF-fitting.R
+- NewWave_comparison.R
+- Figure_preparation.R
+- Figures_construction.R
 
 
 ## CaseStudy benchmarks
 To reproduce the results of the CaseStudy, one should do the following steps:
-Run the following R-scripts:
+Run the following R-scripts at Benchmarking/CaseStudy/:
 - TENxBrainData_Processing.R
 - High_variable_genes.R
 - Model_selection_eigenvalues.R
