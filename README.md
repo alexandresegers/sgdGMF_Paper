@@ -5,42 +5,11 @@ Additionally, sgdGMF implements the alternated iterative re-weighted least squar
 
 This repository contains a copy of the package and all code required to replicate the results in [[4]](#4).
 
-## Simulation benchmarks
-
-## Arigoni benchmarks
-
-To reproduce the results of the Arigoni dataset, one should do the following steps:
-
+The reproduce the results of the manuscript, one should:
 - Download the raw data at: https://figshare.com/articles/dataset/BE1_10XGenomics_count_matrices/23939481/1?file=42312711
 - Put all the respective files of each cell-type in Benchmarking/Arigoni/Data/BE1/raw
 
-Run the following R-scripts at Benchmarking/Arigoni/:
-- preprocessing.R
-- Data_preparation.R
-- Eigenvalues_model_selection.R
-- sgdGMF-cv.R
-- sgdGMF-fitting.R
-- NewWave_comparison.R
-- Figure_preparation.R
-- Figures_construction.R
-
-
-## CaseStudy benchmarks
-To reproduce the results of the CaseStudy, one should do the following steps:
-
-Run the following R-scripts at Benchmarking/CaseStudy/:
-- TENxBrainData_Processing.R
-- High_variable_genes.R
-- Model_selection_eigenvalues.R
-- CaseStudy_Model_fitting_full.R
-- CaseStudy_sgdGMF_100k_1000_1000_250.R, CaseStudy_sgdGMF_200k_2000_1000_250.R, CaseStudy_sgdGMF_300k_3000_1000_250.R, 
-- CaseStudy_glmpca_100k_avagrad_def.R, CaseStudy_glmpca_200k_avagrad_def.R,
-CaseStudy_glmpca_300k_avagrad_def.R
-- CaseStudy_glmpca_100k_fisher_def.R, CaseStudy_glmpca_200k_fisher_def.R, CaseStudy_glmpca_300k_fisher_def.R
-- CaseStudy_NewWave_100k_def.R, CaseStudy_NewWave_200k_def.R, CaseStudy_NewWave_300k_def.R and the variants followed by _2, _3, _4 and_5
-- Heatmap_plot.R
-- time_plots.R
-- CaseStudy_merging_plots.R
+Then, one can run sgdGMF_manuscript.R script to obtain all results of the paper (this can take a lot of time for some scripts - mainly for the CaseStudy).
 
 ## References
 <a id="1">[1]</a>
