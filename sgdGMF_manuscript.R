@@ -1,3 +1,16 @@
+# ----------- Simulation benchmark
+
+# First, all data is simulated with splatter, and all methods are run on these
+# simulated datasets.
+source("Benchmarking/Simulation/simulation.R")
+
+# Then, figures are made for the summary statistics and the tSNE projections.
+source("Benchmarking/Simulation/plot_sim_example.R")
+
+# Simularly, figures are made for the summary statistics in function of the 
+# matrix dimensions and latent space rank.
+source("Benchmarking/Simulation/plot_sim_summary.R")
+
 
 # ----------- Arigoni benchmark
 
