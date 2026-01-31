@@ -2,19 +2,21 @@
 
 # First, all data is simulated with splatter, and all methods are run on these
 # simulated datasets.
-source("Benchmarking/Simulation/simulation.R")
+source("Benchmarking/Simulation/simulation_MAIN.R")
+source("Benchmarking/Simulation/simulation_NB.R")
 
 # Then, figures are made for the summary statistics and the tSNE projections.
 source("Benchmarking/Simulation/plot_sim_example.R")
 
-# Simularly, figures are made for the summary statistics in function of the 
+# Simularly, figures are made for the summary statistics in function of the
 # matrix dimensions and latent space rank.
-source("Benchmarking/Simulation/plot_sim_summary.R")
+source("Benchmarking/Simulation/plot_sim_summary_MAIN.R")
+source("Benchmarking/Simulation/plot_sim_summary_NB.R")
 
 
 # ----------- Arigoni benchmark
 
-# First, the raw data of all celltypes is merged together in one file, and 
+# First, the raw data of all celltypes is merged together in one file, and
 # an initial quality control is done.
 source("Benchmarking/Arigoni/preprocessing.R")
 
@@ -25,7 +27,7 @@ source("Benchmarking/Arigoni/Data_preparation.R")
 # We calculate a scree-plot based on the eigenvalues for the model selection.
 source("Benchmarking/Arigoni/Eigenvalues_model_selection.R")
 
-# We also perform cross-validation based on model selection criteria and 
+# We also perform cross-validation based on model selection criteria and
 # out of sample deviances to select the number of latent factors.
 source("Benchmarking/Arigoni/sgdGMF-cv.R")
 
@@ -33,7 +35,7 @@ source("Benchmarking/Arigoni/sgdGMF-cv.R")
 # chosen in the cross-validation.
 source("Benchmarking/Arigoni/sgdGMF-fitting.R")
 
-# Benchmarking with glmPCA and NewWave is done. Here, these models are 
+# Benchmarking with glmPCA and NewWave is done. Here, these models are
 # used to perform dimensionality reduction on the Arigoni dataset.
 source("Benchmarking/Arigoni/NewWave_comparison.R")
 
@@ -63,11 +65,11 @@ source("Benchmarking/CaseStudy/Model_selection_eigenvalues.R")
 # estimated with the scree plot.
 source("Benchmarking/CaseStudy/CaseStudy_Model_fitting_full.R")
 
-# For the comparisons of the time-usage, sgdGMF is also run on smaller 
-# parts of the data. Here, 5 times, the time is measured to compute the 
-# dimensionality reduction for 100.000, 200.000 and 300.000 cells in this 
-# dataset. This is also done for glmPCA with Avagrad estimation and with Fisher 
-# estimation. Also, NewWave is used on the subsampled dataset. However, as 
+# For the comparisons of the time-usage, sgdGMF is also run on smaller
+# parts of the data. Here, 5 times, the time is measured to compute the
+# dimensionality reduction for 100.000, 200.000 and 300.000 cells in this
+# dataset. This is also done for glmPCA with Avagrad estimation and with Fisher
+# estimation. Also, NewWave is used on the subsampled dataset. However, as
 # NewWave couldn't be run 5 times within the limited computing time (72 hours),
 # it was run in 5 different scripts for each subsampled dataset.
 
