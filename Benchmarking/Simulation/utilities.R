@@ -5,22 +5,34 @@
 # rm(list = ls())
 # graphics.off()
 
-# Load the GMF functions
-# devtools::load_all()
-
 # Import the needed packages
 suppressPackageStartupMessages({
   # Latent variable modelling
   require(MASS)
-  library(gllvm)
+
+  # Fast linear algebra
+  library(irlba)
+  library(svd)
+  library(RSpectra)
+
+  # sgdGMF
+  library(sgdGMF)
+
+  # Genalized PCA
+  library(gmf)
   library(glmpca)
-  library(NewWave)
+  library(PoissonPCA)
+
+  # Generalized factor models
+  library(gllvm)
+  library(GFM)
+  library(COAP)
+  library(rrpack)
 
   # Matrix factorization
   library(NMF)
   library(NNLM)
   library(cmfrec)
-  library(gmf)
 
   # Low-dimensional embedding
   library(Rtsne)
@@ -31,9 +43,11 @@ suppressPackageStartupMessages({
   library(splatter)
   library(scater)
   library(zinbwave)
+  library(NewWave)
 
   # Clustering
   library(cluster)
+  library(bluster)
 
   # Visualization
   library(reshape2)
@@ -44,7 +58,7 @@ suppressPackageStartupMessages({
 })
 
 ## GLOBAL VARIABLES ----
-NCORES = 8
+NCORES = 6
 
 ## UTILITIES ----
 
@@ -85,13 +99,6 @@ ssqrt <- function (x) {
   sign(x) * sqrt(abs(x) + 1e-03)
 }
 
-rdirichlet = function (n, m = 2, alpha = 1) {
-  x = rgamma(n*m, shape = alpha, rate = 1)
-  x = matrix(x, nrow = m, ncol = n)
-  y = t(apply(x, 2, function(x) x / sum(x)))
-  return (y)
-}
-
 ## ERROR MEASURES ----
 
 # Residual sum of squares
@@ -118,19 +125,23 @@ cosdist <- function (y, x, f = log1p) {
 # Explained deviance
 expdev <- function (y, x, family) {
   m <- mean(y, na.rm = TRUE)
-  # nulldev <- mean(family$dev.resids(y, m, 1), na.rm = TRUE)
-  # fitdev <- mean(family$dev.resids(y, x, 1), na.rm = TRUE)
-  dev0 <- matrix.deviance(m, y, family = family)
-  devf <- matrix.deviance(x, y, family = family)
+  dev0 <- sgdGMF:::matrix.deviance(m, y, family = family)
+  devf <- sgdGMF:::matrix.deviance(x, y, family = family)
   return (devf / dev0)
 }
 
+# Average silhouette
 avgsil <- function (y, g) {
   mean(cluster::silhouette(as.numeric(g), dist(y))[,3])
 }
 
+# Neighbor purity
+purity <- function (u, g) {
+  mean(bluster::neighborPurity(u, clusters = g)$purity)
+}
+
 # Summary error matrix
-error.matrix = function (y, ...) {
+error.matrix <- function (y, ...) {
   object.list = list(...)
   error = data.frame(Model = c(), Time = c(), RSS = c(), Cos = c(), Dev = c())
   for (k in 1:length(object.list)) {
@@ -149,100 +160,31 @@ error.matrix = function (y, ...) {
 }
 
 # Summary error matrix + silhouette
-error.summary = function (i, y, g, ...) {
+error.summary <- function (y, g, ...) {
   object.list = list(...)
-  # error = data.frame(Model = c(), Time = c(), RSS = c(), Cos = c(), Dev = c(), Sil = c())
-  error = data.frame(iteration = c(), model = c(), dimension = c(), ncomp = c(),
-                     time = c(), error = c(), deviance = c(), silhouette = c())
+  error = data.frame(Model = c(), Time = c(), RSS = c(), Cos = c(), Dev = c(), Sil = c())
   for (k in 1:length(object.list)) {
     .object = object.list[[k]]
     .mu = .object$mu
     .model = .object$model
-    .iter = i
-    .dim = floor(ncol(y) / 10)
-    .ncomp = ifelse(is.null(.object$u), NA, ncol(.object$u))
     .time = ifelse(is.null(.object$time), NA, round(.object$time[3], 4))
+    .memory = ifelse(is.null(.object$memory), NA, round(.object$memory$Peak_RAM_Used_MiB[1]))
     .rss = ifelse(is.null(.mu), NA, round(rss(y, .mu), 4))
     .cos = ifelse(is.null(.mu), NA, round(cosdist(y, .mu), 4))
     .dev = ifelse(is.null(.mu), NA, round(expdev(y, .mu, family = poisson()), 4))
     .sil = ifelse(is.null(.object$tsne), NA, round(avgsil(.object$tsne, g), 4))
-    # .error = data.frame(Model = .model, Time = .time, RSS = .rss, Cos = .cos, Dev = .dev, Sil = .sil)
-    .error = data.frame(iteration = .iter, model = .model, dimension = .dim,
-                        ncomp = .ncomp, time = .time, error = .rss,
-                        deviance = .dev, silhouette = .sil)
+    .purity = ifelse(is.null(.object$u), NA, round(purity(.object$u, g), 4))
+    .error = data.frame(Model = .model, Time = .time, Memory = .memory, RSS = .rss,
+                        Cos = .cos, Dev = .dev, Sil = .sil, Purity = .purity)
     error = rbind(error, .error)
     rownames(error)[k] = k
   }
   return (error)
 }
 
-## POSTPROCESSING AND PLOTTING ----
-
-## Plotting function
-plot.coeff.matrix <- function (scores, limits = NULL, colours = NULL,
-                               transpose = TRUE, symmetric = TRUE) {
-
-  if (is.null(colours)) colours = c("navyblue", "grey95", "darkred")
-
-  if (transpose) scores <- t(scores)
-
-  scores[scores > quantile(scores, .99, na.rm = TRUE)] <- quantile(scores, .99, na.rm = TRUE)
-  scores[scores < quantile(scores, .01, na.rm = TRUE)] <- quantile(scores, .01, na.rm = TRUE)
-
-  df <- expand.grid(x = 1:nrow(scores), y = 1:ncol(scores))
-  df$z <- as.vector(scores)
-
-  if (is.null(limits)) {
-    if (symmetric) {
-      limits <- c(-1,+1) * max(abs(scores))
-    } else {
-      limits <- range(scores)
-    }
-  }
-
-  plt <- ggplot(data = df, mapping = aes(x = x, y = y, fill = z)) +
-    geom_raster() + labs(x = "", y = "", fill = "") +
-    scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0)) +
-    scale_fill_gradientn(colours = colours, limits = limits) +
-    theme_bw() + theme(axis.text = element_blank(), axis.ticks = element_blank())
-  plt
-}
-
-# Compare the latent representations
-plot.eigvectors = function (u, idx = 1:2, title = "Biplot") {
-  ggplot(data = data.frame(x = u[,idx[1]], y = u[,idx[2]], z = 1:nrow(u))) +
-    geom_hline(yintercept = 0, lty = 2, color = 1) +
-    geom_vline(xintercept = 0, lty = 2, color = 1) +
-    geom_point(mapping = aes(x = x, y = y, color = z), size = 2) +
-    geom_text(mapping = aes(x = x, y = y - 0.025, color = z, label = z), size = 3) +
-    scale_color_gradientn(colors = c("navyblue", "gold"), name = "") +
-    labs(x = "PC1", y = "PC2", title = title) + theme_bw() +
-    theme(axis.title = element_blank())
-}
-
 ## TRAIN-TEST SPLIT ----
 
 ## Train-test split
-train.test.split <- function (y, test = 0.3) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  mask <- cbind(x = sample.int(n = n, size = floor(test * n * m), replace = TRUE),
-                y = sample.int(n = m, size = floor(test * n * m), replace = TRUE))
-
-  ycc <- y
-  yna <- y
-  ynn <- y
-
-  ynn[mask] <- NA
-  isna <- is.na(ynn)
-
-  yna[!isna] <- NA
-
-  list(mask = mask, isna = isna, ycc = ycc, yna = yna, ynn = ynn)
-}
-
 train.test.split <- function (y, test = 0.3) {
 
   n = nrow(y)
@@ -260,92 +202,13 @@ train.test.split <- function (y, test = 0.3) {
   list(train = train, test = test)
 }
 
-## Matrix completion for gllvm and glmpca
-matrix.completion <- function (y, x = NULL, z = NULL, ncomp = 2,
-                               family = poisson(), niter = 10) {
-
-  # data dimensions
-  n = nrow(y)
-  m = ncol(y)
-  d = ncomp
-  p = if (is.null(x)) 0 else ncol(x)
-  q = if (is.null(z)) 0 else ncol(z)
-
-  # Initialization via iterated least squares
-  init = sgdGMF:::ls.svd.init(Y = y, X = x, Z = z, d = d, family = family)
-
-  # create proxy model matrices if they are null
-  if (p == 0) x = matrix(0, nrow = n, ncol = p)
-  if (q == 0) z = matrix(0, nrow = q, ncol = m)
-
-  # compute the linear predictor
-  eta = matrix(0, nrow = n, ncol = m)
-  eta[] = eta + tcrossprod(init$u, init$v)
-  eta[] = eta + tcrossprod(x, init$bx)
-  eta[] = eta + tcrossprod(init$bz, z)
-
-  # compute the estimated mean, variance and deviance residuals
-  mu = family$linkinv(eta)
-  var = family$variance(mu)
-
-  # fill the missing values
-  isna = is.na(y)
-  y[isna] = round(mu[isna])
-
-  # compute the deviance and Pearson residuals
-  dr = family$dev.resids(y, mu, 1)
-  pr = (y - mu) / sqrt(var)
-
-  # return the output
-  # list(n = n, m = m, p = p, q = q,
-  #      u = init$u, v = init$v,
-  #      beta.x = init$bx, beta.z = init$bz,
-  #      y = y, eta = eta, mu = mu, var = var,
-  #      dr = dr, pr = pr, isna = isna)
-
-  # return the output
-  return (y)
-}
-
-naive.completion = function (y) {
+## Naive matrix completion with column mean imputation
+naive.completion <- function (y) {
   apply(y, 2, function (x) {
     m = mean(x, na.rm = TRUE)
     x[is.na(x)] = round(m)
     return (x)
   })
-}
-
-## PREPROCESSING ----
-
-null.residuals = function (
-    y, x = NULL, z = NULL,
-    family = poisson(), type = "deviance"
-) {
-  n = nrow(y); m = ncol(y)
-  y = as.matrix(y)
-  yr = rowMeans(y) # row-average
-  yc = colMeans(y) # col-average
-  yt = mean(yr) # total average
-  mu = tcrossprod(yr, yc) / yt
-
-  res = matrix(NA, nrow = n, ncol = m)
-  if (type == "deviance") {
-    res[] = sign(y - mu) * sqrt(family$dev.resids(y, mu, 1))
-  }
-  if (type == "pearson") {
-    res[] = (y - mu) / sqrt(family$variance(mu))
-  }
-  if (!is.null(x)) {
-    beta = matrix(NA, nrow = m, ncol = ncol(x))
-    beta[] = t(solve(crossprod(x, x), crossprod(x, res)))
-    res[] = res - tcrossprod(x, beta)
-  }
-  if (!is.null(z)) {
-    gamma = matrix(NA, nrow = n, ncol = ncol(z))
-    gamma[] = t(solve(crossprod(z, z), crossprod(z, t(res))))
-    res[] = res - tcrossprod(gamma, z)
-  }
-  return (res)
 }
 
 ## MODEL FIT ----
@@ -357,27 +220,11 @@ fit.pearson = function (y, x = NULL, z = NULL, ncomp = 2,
   # model fitting
   time0 = proc.time()
   res = scry::nullResiduals(object = as.matrix(y), fam = "poisson", type = "pearson")
-
-  if (is.null(x)) {
-    beta.x = 0
-  } else {
-    beta.x = t(solve(crossprod(x), crossprod(x, res)))
-    res = res - tcrossprod(x, beta.x)
-  }
-
-  if (is.null(z)) {
-    beta.z = 0
-  } else {
-    beta.z = t(solve(crossprod(z), crossprod(z, t(res))))
-    res = res - tcrossprod(beta.z, z)
-  }
-
-  # if (!is.null(x)) res = res - x %*% solve(crossprod(x), crossprod(x, res))
   SVD = svd::propack.svd(res, neig = ncomp)
   timef = proc.time()
 
-  # if (is.null(X)) beta.x = matrix(0, nrow = ncol(y), ncol = 0)
-  # if (is.null(z)) beta.z = matrix(0, nrow = nrow(y), ncol = 0)
+  if (!is.null(X)) beta.x = matrix(0, nrow = ncol(y), ncol = ncol(x))
+  if (!is.null(z)) beta.z = matrix(0, nrow = nrow(y), ncol = ncol(z))
 
   eta = tcrossprod(SVD$u, SVD$v %*% diag(SVD$d))
   mu = family$linkinv(eta)
@@ -407,27 +254,11 @@ fit.deviance = function (y, x = NULL, z = NULL, ncomp = 2,
   # model fitting
   time0 = proc.time()
   res = scry::nullResiduals(object = as.matrix(y), fam = "poisson", type = "deviance")
-
-  if (is.null(x)) {
-    beta.x = 0
-  } else {
-    beta.x = t(solve(crossprod(x), crossprod(x, res)))
-    res = res - res - crossprod(x, beta.x)
-  }
-
-  if (is.null(z)) {
-    beta.z = 0
-  } else {
-    beta.z = t(solve(crossprod(z), crossprod(z, t(res))))
-    res = res - crossprod(beta.z, z)
-  }
-
-  # if (!is.null(x)) res = res - x %*% solve(crossprod(x), crossprod(x, res))
   SVD = svd::propack.svd(res, neig = ncomp)
   timef = proc.time()
 
-  if (is.null(X)) beta.x = matrix(0, nrow = ncol(y), ncol = 0)
-  if (is.null(z)) beta.z = matrix(0, nrow = nrow(y), ncol = 0)
+  if (!is.null(X)) beta.x = matrix(0, nrow = ncol(y), ncol = ncol(x))
+  if (!is.null(z)) beta.z = matrix(0, nrow = nrow(y), ncol = ncol(z))
 
   eta = tcrossprod(SVD$u, SVD$v %*% diag(SVD$d))
   mu = family$linkinv(eta)
@@ -464,14 +295,16 @@ fit.gllvm = function (
 
   # model fitting
   time0 = proc.time()
-  fit = gllvm::gllvm(
-    y = y, X = x, Z = z,
-    formula = ~ .,
-    num.lv = ncomp,
-    family = family,
-    method = "EVA",
-    reltol = tol) %>%
-    suppressWarnings()
+  memory = peakRAM::peakRAM(
+    fit <- gllvm::gllvm(
+      y = y, X = x, Z = z,
+      formula = ~ .,
+      num.lv = ncomp,
+      family = family,
+      method = "EVA",
+      reltol = tol) %>%
+      suppressWarnings() %>%
+      suppressMessages())
   timef = proc.time()
 
   # Latent factor normalization
@@ -516,7 +349,278 @@ fit.gllvm = function (
     mu = mu,
     tsne = scale(tsne$Y),
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
+}
+
+# GFM via alternated maximization
+fit.gfmam = function(
+    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
+    maxiter = 1000, stepsize = 0.01, tol = 1e-05,
+    verbose = FALSE, train = NULL, test = NULL) {
+
+  n = nrow(y)
+  m = ncol(y)
+
+  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
+  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
+
+  idx = which(apply(y, 2, sd) == 0)
+  if (length(idx) > 0) {
+    for (j in idx) {
+      y[sample(1:n, 1),j] = 1
+    }
+  }
+
+  # GFM-AM model fitting
+  time0 = proc.time()
+  memory = peakRAM::peakRAM(
+    fit <- GFM::gfm(
+      XList = list(y),
+      types = "poisson",
+      q = ncomp,
+      offset = FALSE,
+      dc_eps = tol,
+      maxIter = maxiter,
+      verbose = verbose,
+      algorithm = "AM") %>%
+      suppressWarnings() %>%
+      suppressMessages())
+  timef = proc.time()
+
+  # Latent factor normalization
+  b = fit$hmu
+  xb = tcrossprod(rep(1, n), b)
+
+  a = rep(0, m)
+  az = matrix(0, nrow = n, ncol = m)
+
+  uv = tcrossprod(fit$hH, fit$hB)
+
+  # Fitted values
+  eta = xb + az + uv
+  mu = family$linkinv(eta)
+
+  # Orthogonalization
+  uv = svd::propack.svd(uv, neig = ncomp)
+
+  # tSNE low dimensional embedding
+  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
+                      num_threads = NCORES, verbose = verbose)
+
+  # Explained deviance metrics
+  # rss  =  RSS(y, mu)
+  # rmse = RMSE(y, mu)
+  # cosd = COSD(y, mu)
+  # dev  = RDEV(y, mu, family = family)
+
+  error = NULL
+  if (!is.null(train) && !is.null(test)) {
+    error = data.frame(
+      rss  = c(rss(train, mu), rss(test, mu)),
+      cosd = c(cosdist(train, mu), cosdist(test, mu)),
+      dev  = c(expdev(train, mu, family = family),
+               expdev(test, mu, family = family)))
+
+    colnames(error) = c("RSS", "Cos", "Dev")
+    rownames(error) = c("Train", "Test")
+  }
+
+  # Output
+  list(
+    model = "GFM-AM",
+    u = uv$u,
+    v = uv$v,
+    d = uv$d,
+    bx = b,
+    bz = a,
+    eta = eta,
+    mu = mu,
+    tsne = scale(tsne$Y),
+    dev = NULL,
+    error = error,
+    time = timef - time0,
+    memory = memory)
+}
+
+# GFM via variational EM
+fit.gfmvem = function(
+    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
+    maxiter = 1000, stepsize = 0.01, tol = 1e-05,
+    verbose = FALSE, train = NULL, test = NULL) {
+
+  n = nrow(y)
+  m = ncol(y)
+
+  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
+  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
+
+  idx = which(apply(y, 2, sd) == 0)
+  if (length(idx) > 0) {
+    for (j in idx) {
+      y[sample(1:n, 1),j] = 1
+    }
+  }
+
+  # GFM-VEM model fitting
+  time0 = proc.time()
+  memory = peakRAM::peakRAM(
+    fit <- GFM::gfm(
+      XList = list(y),
+      types = "poisson",
+      q = ncomp,
+      offset = FALSE,
+      dc_eps = tol,
+      maxIter = maxiter,
+      verbose = verbose,
+      algorithm = "VEM") %>%
+      suppressWarnings() %>%
+      suppressMessages())
+  timef = proc.time()
+
+  # Latent factor normalization
+  b = fit$hmu
+  xb = tcrossprod(rep(1, n), b)
+
+  a = rep(0, m)
+  az = matrix(0, nrow = n, ncol = m)
+
+  uv = tcrossprod(fit$hH, fit$hB)
+
+  # Fitted values
+  eta = xb + az + uv
+  mu = family$linkinv(eta)
+
+  # Orthogonalization
+  uv = svd::propack.svd(uv, neig = ncomp)
+
+  # tSNE low dimensional embedding
+  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
+                      num_threads = NCORES, verbose = verbose)
+
+  # Explained deviance metrics
+  # rss  =  RSS(y, mu)
+  # rmse = RMSE(y, mu)
+  # cosd = COSD(y, mu)
+  # dev  = RDEV(y, mu, family = family)
+
+  error = NULL
+  if (!is.null(train) && !is.null(test)) {
+    error = data.frame(
+      rss  = c(rss(train, mu), rss(test, mu)),
+      cosd = c(cosdist(train, mu), cosdist(test, mu)),
+      dev  = c(expdev(train, mu, family = family),
+               expdev(test, mu, family = family)))
+
+    colnames(error) = c("RSS", "Cos", "Dev")
+    rownames(error) = c("Train", "Test")
+  }
+
+  # Output
+  list(
+    model = "GFM-VEM",
+    u = uv$u,
+    v = uv$v,
+    d = uv$d,
+    bx = b,
+    bz = a,
+    eta = eta,
+    mu = mu,
+    tsne = scale(tsne$Y),
+    dev = NULL,
+    error = error,
+    time = timef - time0,
+    memory = memory)
+}
+
+# COAP (covariate augmented Poisson factor model)
+fit.coapf = function(
+    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
+    maxiter = 1000, stepsize = 0.01, tol = 1e-05,
+    verbose = FALSE, train = NULL, test = NULL) {
+
+  n = nrow(y)
+  m = ncol(y)
+
+  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
+  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
+
+  idx = which(apply(y, 2, sd) == 0)
+  if (length(idx) > 0) {
+    for (j in idx) {
+      y[sample(1:n, 1),j] = 1
+    }
+  }
+
+  # COAP model fitting
+  time0 = proc.time()
+  memory = peakRAM::peakRAM(
+    fit <- COAP::RR_COAP(
+      X_count = y,
+      Z = x,
+      q = ncomp,
+      epsELBO = tol,
+      maxIter = maxiter,
+      verbose = verbose,
+      joint_opt_beta = FALSE,
+      fast_svd = TRUE) %>%
+      suppressWarnings() %>%
+      suppressMessages())
+  timef = proc.time()
+
+  # Latent factor normalization
+  b = fit$bbeta
+  xb = tcrossprod(x, b)
+
+  a = rep(0, m)
+  az = matrix(0, nrow = n, ncol = m)
+
+  uv = tcrossprod(fit$H, fit$B)
+
+  # Fitted values
+  eta = xb + az + uv
+  mu = family$linkinv(eta)
+
+  # Orthogonalization
+  uv = svd::propack.svd(uv, neig = ncomp)
+
+  # tSNE low dimensional embedding
+  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
+                      num_threads = NCORES, verbose = verbose)
+
+  # Explained deviance metrics
+  # rss  =  RSS(y, mu)
+  # rmse = RMSE(y, mu)
+  # cosd = COSD(y, mu)
+  # dev  = RDEV(y, mu, family = family)
+
+  error = NULL
+  if (!is.null(train) && !is.null(test)) {
+    error = data.frame(
+      rss  = c(rss(train, mu), rss(test, mu)),
+      cosd = c(cosdist(train, mu), cosdist(test, mu)),
+      dev  = c(expdev(train, mu, family = family),
+               expdev(test, mu, family = family)))
+
+    colnames(error) = c("RSS", "Cos", "Dev")
+    rownames(error) = c("Train", "Test")
+  }
+
+  # Output
+  list(
+    model = "COAP",
+    u = uv$u,
+    v = uv$v,
+    d = uv$d,
+    bx = b,
+    bz = a,
+    eta = eta,
+    mu = mu,
+    tsne = scale(tsne$Y),
+    dev = NULL,
+    error = error,
+    time = timef - time0,
+    memory = memory)
 }
 
 # GLMPCA via AVAGRAD
@@ -533,16 +637,18 @@ fit.glmpca = function (
 
   # glmPCA model fitting
   time0 = proc.time()
-  fit = glmpca::glmpca(
-    Y = y, X = z, Z = x,
-    L = ncomp,
-    fam = "poi",
-    minibatch = "none",
-    optimizer = "fisher",
-    ctl = list(verbose = verbose,
-               maxIter = maxiter,
-               tol = tol)) %>%
-    suppressWarnings()
+  memory = peakRAM::peakRAM(
+    fit <- glmpca::glmpca(
+      Y = y, X = z, Z = x,
+      L = ncomp,
+      fam = "poi",
+      minibatch = "none",
+      optimizer = "fisher",
+      ctl = list(verbose = verbose,
+                 maxIter = maxiter,
+                 tol = tol)) %>%
+      suppressWarnings() %>%
+      suppressMessages())
   timef = proc.time()
 
   # Latent factor normalization
@@ -592,10 +698,11 @@ fit.glmpca = function (
     tsne = scale(tsne$Y),
     dev = fit$dev,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
-#
+# GLMPCA via AVAGRAD
 fit.avagrad = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     maxiter = 1000, stepsize = 0.01, tol = 1e-05,
@@ -609,16 +716,18 @@ fit.avagrad = function (
 
   # glmPCA model fitting
   time0 = proc.time()
-  fit = glmpca::glmpca(
-    Y = y, X = z, Z = x,
-    L = ncomp,
-    fam = "poi",
-    minibatch = "none",
-    optimizer = "avagrad",
-    ctl = list(verbose = verbose,
-               maxIter = maxiter,
-               tol = tol)) %>%
-    suppressWarnings()
+  memory = peakRAM::peakRAM(
+    fit <- glmpca::glmpca(
+      Y = y, X = z, Z = x,
+      L = ncomp,
+      fam = "poi",
+      minibatch = "none",
+      optimizer = "avagrad",
+      ctl = list(verbose = verbose,
+                 maxIter = maxiter,
+                 tol = tol)) %>%
+      suppressWarnings() %>%
+      suppressMessages())
   timef = proc.time()
 
   # Latent factor normalization
@@ -668,10 +777,11 @@ fit.avagrad = function (
     tsne = scale(tsne$Y),
     dev = fit$dev,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
-#
+# GLMPCA via Fisher scoring
 fit.fisher = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     maxiter = 100, stepsize = 0.01, tol = 1e-05,
@@ -685,16 +795,18 @@ fit.fisher = function (
 
   # glmPCA model fitting
   time0 = proc.time()
-  fit = glmpca::glmpca(
-    Y = y, X = z, Z = x,
-    L = ncomp,
-    fam = "poi",
-    minibatch = "none",
-    optimizer = "fisher",
-    ctl = list(verbose = verbose,
-               maxIter = maxiter,
-               tol = tol)) %>%
-    suppressWarnings()
+  memory = peakRAM::peakRAM(
+    fit <- glmpca::glmpca(
+      Y = y, X = z, Z = x,
+      L = ncomp,
+      fam = "poi",
+      minibatch = "none",
+      optimizer = "fisher",
+      ctl = list(verbose = verbose,
+                 maxIter = maxiter,
+                 tol = tol)) %>%
+      suppressWarnings() %>%
+      suppressMessages())
   timef = proc.time()
 
   # Latent factor normalization
@@ -744,7 +856,8 @@ fit.fisher = function (
     tsne = scale(tsne$Y),
     dev = fit$dev,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 ## NBWaVE
@@ -768,17 +881,19 @@ fit.nbwave = function (
 
   # NBWaVE model fitting
   time0 = proc.time()
-  fit = NewWave::newFit(
-    Y = t(y),
-    X = x,
-    V = z,
-    K = ncomp,
-    commondispersion = TRUE,
-    verbose = verbose,
-    maxiter_optimize = maxiter,
-    stop_epsilon = tol,
-    children = NCORES) %>%
-    suppressWarnings()
+  memory = peakRAM::peakRAM(
+    fit <- NewWave::newFit(
+      Y = t(y),
+      X = x,
+      V = z,
+      K = ncomp,
+      commondispersion = TRUE,
+      verbose = verbose,
+      maxiter_optimize = maxiter,
+      stop_epsilon = tol,
+      children = NCORES) %>%
+      suppressWarnings() %>%
+      suppressMessages())
   timef = proc.time()
 
   # Latent factor normalization
@@ -832,7 +947,8 @@ fit.nbwave = function (
     tsne = scale(tsne$Y),
     dev = NULL,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 ## NMF
@@ -844,9 +960,16 @@ fit.nmf = function (
 
   time0 = proc.time()
   if (verbose) {
-    fit = NMF::nmf(x = y, rank = ncomp, method = "brunet", seed = "nndsvd", nrun = 1, .options = "v")
+    memory = peakRAM::peakRAM(
+      fit <- NMF::nmf(x = y, rank = ncomp, method = "brunet", seed = "nndsvd", nrun = 1, .options = "v") %>%
+        suppressWarnings() %>% suppressMessages()
+    )
   } else {
-    fit = NMF::nmf(x = y, rank = ncomp, method = "brunet", seed = "nndsvd", nrun = 1)
+    memory = peakRAM::peakRAM(
+      fit <- NMF::nmf(x = y, rank = ncomp, method = "brunet", seed = "nndsvd", nrun = 1) %>%
+        suppressWarnings() %>% suppressMessages()
+    )
+
   }
   timef = proc.time()
 
@@ -881,21 +1004,24 @@ fit.nmf = function (
     tsne = scale(tsne$Y),
     dev = NULL,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
-
 
 ## NNLM
 fit.nnlm = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 1000, verbose = FALSE, train = NULL, test = NULL) {
+    penalty = 1, maxiter = 1000, verbose = FALSE,
+    train = NULL, test = NULL) {
 
   suppressPackageStartupMessages(require("NNLM"))
 
   time0 = proc.time()
-  fit = NNLM::nnmf(
-    A = y, k = ncomp, alpha = penalty, beta = penalty, n.threads = NCORES,
-    method = "lee", loss = "mkl", max.iter = maxiter, verbose = verbose)
+  memory = peakRAM::peakRAM(
+    fit <- NNLM::nnmf(
+      A = y, k = ncomp, alpha = penalty, beta = penalty, n.threads = NCORES,
+      method = "lee", loss = "mkl", max.iter = maxiter, verbose = verbose)) %>%
+    suppressWarnings() %>% suppressMessages()
   timef = proc.time()
 
   mu = fit$W %*% fit$H
@@ -929,14 +1055,15 @@ fit.nnlm = function (
     tsne = scale(tsne$Y),
     dev = fit$nkl,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
-
 
 ## NNLM
 fit.cmf = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 1000, verbose = FALSE, train = NULL, test = NULL) {
+    penalty = 1, maxiter = 1000, verbose = FALSE,
+    train = NULL, test = NULL) {
 
   suppressPackageStartupMessages(require("cmfrec"))
 
@@ -944,10 +1071,12 @@ fit.cmf = function (
   if (!is.null(z)) if (sd(z[,1]) == 0) z = z[, -1, drop = FALSE]
 
   time0 = proc.time()
-  fit = cmfrec::CMF(
-    X = y, U = x, I = z, k = ncomp, nonneg = TRUE,
-    user_bias = FALSE, item_bias = FALSE, center = FALSE,
-    nthreads = NCORES, niter = maxiter, verbose = verbose)
+  memory = peakRAM::peakRAM(
+    fit <- cmfrec::CMF(
+      X = y, U = x, I = z, k = ncomp, nonneg = TRUE,
+      user_bias = FALSE, item_bias = FALSE, center = FALSE,
+      nthreads = NCORES, niter = maxiter, verbose = verbose) %>%
+      suppressWarnings() %>% suppressMessages())
   timef = proc.time()
 
   eta = crossprod(fit$matrices$A, fit$matrices$B) + fit$matrices$glob_mean
@@ -982,390 +1111,14 @@ fit.cmf = function (
     tsne = scale(tsne$Y),
     dev = NULL,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
-## MODEL FIT (R) ----
-
-## GMF via SVDReg
-fit.svdreg = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-04,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  time0 = proc.time()
-  fit = sgdGMF::init.param(
-    y, x, z, ncomp = ncomp, family = family,
-    method = "svd", niter = maxiter, verbose = verbose)
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$U, fit$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = tcrossprod(cbind(x, fit$A, fit$U), cbind(fit$B, z, fit$V))
-  mu = family$linkinv(eta)
-
-  # tSNE low dimensional embedding
-  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
-                      num_threads = NCORES, verbose = verbose)
-
-  # Error matrix
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "SVDReg",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$bx,
-    bz = fit$bz,
-    eta = eta,
-    mu = mu,
-    tsne = scale(tsne$Y),
-    dev = NULL,
-    error = error,
-    time = timef - time0)
-}
+## MODEL sgdGMF FIT ----
 
 ## GMF via AIRWLS
-fit.R.airwls = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-04,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdgmf(
-    Y = y, X = x, Z = z,
-    ncomp = ncomp,
-    family = family,
-    method = "airwls",
-    penalty = list(u = penalty, v = penalty, b = 0),
-    init = list(init = "svd", niter = 10),
-    control = list(maxiter = maxiter,
-                   stepsize = stepsize,
-                   verbose = verbose,
-                   tol = tol)) %>%
-    suppressWarnings()
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$coef$U, fit$coef$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = fit$pred$eta
-  mu = fit$pred$mu
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "AIRWLS",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$coef$betaX,
-    bz = fit$coef$betaZ,
-    eta = fit$pred$eta,
-    mu = fit$pred$mu,
-    dev = fit$trace$deviance,
-    error = error,
-    time = timef - time0)
-}
-
-## GMF via quasi-Newton algorithm
-fit.R.newton = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 1000, stepsize = 0.01, tol = 1e-05,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdgmf(
-    Y = y, X = x, Z = z,
-    ncomp = ncomp,
-    family = family,
-    method = "newton",
-    penalty = list(u = penalty, v = penalty, b = 0),
-    init = list(init = "svd", niter = 10),
-    control = list(maxiter = maxiter,
-                   stepsize = stepsize,
-                   verbose = verbose,
-                   frequency = 25,
-                   tol = tol)) %>%
-    suppressWarnings()
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$coef$U, fit$coef$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = fit$pred$eta
-  mu = fit$pred$mu
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "Newton",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$coef$betaX,
-    bz = fit$coef$betaZ,
-    eta = fit$pred$eta,
-    mu = fit$pred$mu,
-    dev = fit$trace$deviance,
-    error = error,
-    time = timef - time0)
-}
-
-## Coordinate stochastic gradient descent
-fit.R.csgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 1000, stepsize = 0.001, tol = 1e-04,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdgmf(
-    Y = y, X = x, Z = z,
-    ncomp = ncomp,
-    family = family,
-    method = "c-sgd",
-    penalty = list(u = penalty, v = penalty, b = 0),
-    init = list(init = "svd", niter = 10),
-    control = list(maxiter = maxiter,
-                   size = c(5, 5),
-                   rate0 = stepsize,
-                   verbose = verbose,
-                   frequency = 100)) %>%
-    suppressWarnings()
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$coef$U, fit$coef$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = fit$pred$eta
-  mu = fit$pred$mu
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "C-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$coef$betaX,
-    bz = fit$coef$betaZ,
-    eta = fit$pred$eta,
-    mu = fit$pred$mu,
-    dev = fit$trace$deviance,
-    error = error,
-    time = timef - time0)
-}
-
-## Averaged stochastic gradient descent
-fit.R.bsgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 5000, stepsize = 0.001, tol = 1e-04,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdgmf(
-    Y = y, X = x, Z = z,
-    ncomp = ncomp,
-    family = family,
-    method = "b-sgd",
-    penalty = list(u = penalty, v = penalty, b = 0),
-    init = list(init = "svd", niter = 10),
-    control = list(maxiter = maxiter,
-                   size = c(100, 20),
-                   rate0 = stepsize,
-                   verbose = verbose,
-                   frequency = 250)) %>%
-    suppressWarnings()
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$coef$U, fit$coef$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = fit$pred$eta
-  mu = fit$pred$mu
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "B-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$coef$betaX,
-    bz = fit$coef$betaZ,
-    eta = fit$pred$eta,
-    mu = fit$pred$mu,
-    dev = fit$trace$deviance,
-    error = error,
-    time = timef - time0)
-}
-
-
-## Averaged stochastic gradient descent
-fit.R.msgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 100, stepsize = 0.001, tol = 1e-04,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdgmf(
-    Y = y, X = x, Z = z,
-    ncomp = ncomp,
-    family = family,
-    method = "m-sgd",
-    penalty = list(u = penalty, v = penalty, b = 0),
-    init = list(init = "svd", niter = 10),
-    control = list(maxiter = maxiter,
-                   size = 100,
-                   rate0 = stepsize,
-                   verbose = verbose,
-                   frequency = 10)) %>%
-    suppressWarnings()
-  timef = proc.time()
-
-  # Latent factor normalization
-  uv = tcrossprod(fit$coef$U, fit$coef$V)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  # Fitted values
-  eta = fit$pred$eta
-  mu = fit$pred$mu
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c( RSS(train, mu),  RSS(test, mu)),
-      cosd = c(COSD(train, mu), COSD(test, mu)),
-      dev  = c(RDEV(train, mu, family = family),
-               RDEV(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "M-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = fit$coef$betaX,
-    bz = fit$coef$betaZ,
-    eta = fit$pred$eta,
-    mu = fit$pred$mu,
-    dev = fit$trace$deviance,
-    error = error,
-    time = timef - time0)
-}
-
-
-## MODEL FIT (C++) ----
-
-
-## GMF via AIRWLS
-fit.C.airwls = function (
+fit.airwls = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
     verbose = FALSE, train = NULL, test = NULL) {
@@ -1386,25 +1139,26 @@ fit.C.airwls = function (
     familyname = "negbinom"
   }
 
-  init = sgdGMF::init.param.ols(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE)
+  # model set-up
+  lambda = list(B = 1e-4, A = 1e-4, U = penalty, V = 1e-4)
+  ctr.init = list(method = "ols", type = "link")
+  ctr.alg = list(normalize = FALSE, maxiter = maxiter, nstep = 1, stepsize = stepsize,
+                 eps = 1e-16, nafill = 1, tol = tol,damping = 1e-3, verbos = verbose,
+                 frequency = 25, parallel = TRUE, nthreads = NCORES)
 
   # model fitting
   time0 = proc.time()
   lambda = (1 - 1e-04) * c(0, 0, penalty, 0) + 1e-04
-  fit = sgdGMF::cpp.fit.airwls(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = lambda, maxiter = maxiter, nsteps = 1, stepsize = stepsize,
-    eps = 1e-08, nafill = 1, tol = tol, damping = 1e-03,
-    verbose = verbose, frequency = 25, parallel = TRUE, nthreads = NCORES)
+  memory = peakRAM::peakRAM(
+    fit <- sgdGMF::sgdgmf.fit(Y = y, X = x, Z = z, family = family,
+                              ncomp = ncomp, method = "airwls", penalty = lambda,
+                              control.init = ctr.init, control.alg = ctr.alg))
   timef = proc.time()
 
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
+  bz = fit$A
+  bx = fit$B
+  u = fit$U
+  v = fit$V
 
   # Latent factor normalization
   uv = tcrossprod(u, v)
@@ -1442,12 +1196,13 @@ fit.C.airwls = function (
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 
-## GMF via qiasi-Newton
-fit.C.newton = function (
+## GMF via quasi-Newton
+fit.newton = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
     verbose = FALSE, train = NULL, test = NULL) {
@@ -1461,9 +1216,6 @@ fit.C.newton = function (
   p = ncol(x)
   q = ncol(z)
 
-  # init = gmf.init(y, x, z, d = ncomp, method = "svd",
-  #                 niter = 0, verbose = FALSE)
-
   familyname = family$family
   linkname = family$link
 
@@ -1471,24 +1223,25 @@ fit.C.newton = function (
     familyname = "negbinom"
   }
 
-  init = sgdGMF::init.param.ols(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE)
+  # model set-up
+  lambda = list(B = 0, A = 0, U = penalty, V = 0)
+  ctr.init = list(method = "ols", type = "link")
+  ctr.alg = list(normalize = FALSE, maxiter = maxiter, stepsize = stepsize,
+                 eps = 1e-16, nafill = 1, tol = tol, damping = 1e-3, verbos = verbose,
+                 frequency = 25, parallel = TRUE, nthreads = NCORES)
 
   # model fitting
   time0 = proc.time()
-  fit = sgdGMF::cpp.fit.newton(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = c(0,0,1,0), maxiter = maxiter, stepsize = stepsize,
-    eps = 1e-08, nafill = 1, tol = tol, damping = 1e-03,
-    verbose = verbose, frequency = 25, parallel = TRUE, nthreads = NCORES)
+  memory = peakRAM::peakRAM(
+    fit <- sgdGMF::sgdgmf.fit(Y = y, X = x, Z = z, family = family,
+                              ncomp = ncomp, method = "newton", penalty = lambda,
+                              control.init = ctr.init, control.alg = ctr.alg))
   timef = proc.time()
 
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
+  bz = fit$A
+  bx = fit$B
+  u = fit$U
+  v = fit$V
 
   # Latent factor normalization
   uv = tcrossprod(u, v)
@@ -1526,256 +1279,13 @@ fit.C.newton = function (
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
     error = error,
-    time = timef - time0)
-}
-
-
-## GMF via memoized SGD
-fit.C.msgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  p = ncol(x)
-  q = ncol(z)
-
-  familyname = family$family
-  linkname = family$link
-
-  if (familyname == "Negative Binomial") {
-    familyname = "negbinom"
-  }
-
-  init = sgdGMF::init.param.ols(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdGMF::cpp.fit.msgd(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = c(0,0,1,0), maxiter = maxiter, rate0 = stepsize,
-    size = 100, burn = .9,
-    eps = 1e-08, nafill = 1, tol = tol, damping = 1e-03,
-    verbose = verbose, frequency = 10)
-  timef = proc.time()
-
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
-
-  # Latent factor normalization
-  uv = tcrossprod(u, v)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  mu = fit$mu
-
-  # tSNE low dimensional embedding
-  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
-                      num_threads = NCORES, verbose = verbose)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "M-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = bx,
-    bz = bz,
-    eta = fit$eta,
-    mu = fit$mu,
-    phi = fit$phi,
-    tsne = scale(tsne$Y),
-    dev = fit$trace[,2],
-    error = error,
-    time = timef - time0)
-}
-
-## GMF via coordinate SGD
-fit.C.csgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  p = ncol(x)
-  q = ncol(z)
-
-  familyname = family$family
-  linkname = family$link
-
-  if (familyname == "Negative Binomial") {
-    familyname = "negbinom"
-  }
-
-  init = sgdGMF::init.param.ols(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdGMF::cpp.fit.csgd(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = c(0,0,1,0), maxiter = maxiter, rate0 = stepsize,
-    size1 = 100, size2 = 10,
-    eps = 1e-08, nafill = 1, tol = tol, damping = 1e-03,
-    verbose = verbose, frequency = 100, parallel = FALSE)
-  timef = proc.time()
-
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
-
-  # Latent factor normalization
-  uv = tcrossprod(u, v)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  mu = fit$mu
-
-  # tSNE low dimensional embedding
-  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
-                      num_threads = NCORES, verbose = verbose)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "C-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = bx,
-    bz = bz,
-    eta = fit$eta,
-    mu = fit$mu,
-    phi = fit$phi,
-    tsne = scale(tsne$Y),
-    dev = fit$trace[,2],
-    error = error,
-    time = timef - time0)
-}
-
-
-## GMF via row-wise SGD
-fit.C.rsgd = function (
-    y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
-    penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
-    verbose = FALSE, train = NULL, test = NULL) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
-  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
-
-  p = ncol(x)
-  q = ncol(z)
-
-  familyname = family$family
-  linkname = family$link
-
-  if (familyname == "Negative Binomial") {
-    familyname = "negbinom"
-  }
-
-  init = sgdGMF::init.param.ols(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE)
-
-  # model fitting
-  time0 = proc.time()
-  fit = sgdGMF::cpp.fit.rsgd(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = c(0,0,1,0), maxiter = maxiter, burn = 1, rate0 = stepsize,
-    size1 = 100, size2 = m, eps = 1e-08, nafill = 1, tol = tol,
-    damping = 1e-03, verbose = verbose, frequency = 250)
-  timef = proc.time()
-
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
-
-  # Latent factor normalization
-  uv = tcrossprod(u, v)
-  uv = svd::propack.svd(uv, neig = ncomp)
-
-  mu = fit$mu
-
-  # tSNE low dimensional embedding
-  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
-                      num_threads = NCORES, verbose = verbose)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
-  # Output
-  list(
-    model = "R-SGD",
-    u = uv$u,
-    v = uv$v,
-    d = uv$d,
-    bx = bx,
-    bz = bz,
-    eta = fit$eta,
-    mu = fit$mu,
-    phi = fit$phi,
-    tsne = scale(tsne$Y),
-    dev = fit$trace[,2],
-    error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 
 ## GMF via block-wise SGD
-fit.C.bsgd = function (
+fit.block.sgd = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
     verbose = FALSE, train = NULL, test = NULL) {
@@ -1796,29 +1306,25 @@ fit.C.bsgd = function (
     familyname = "negbinom"
   }
 
-  # init = sgdGMF::init.param.ols(
-  #   Y = y, X = x, Z = z, ncomp = ncomp,
-  #   family = family, verbose = FALSE)
-
-  init = sgdGMF::init.param.glm(
-    Y = y, X = x, Z = z, ncomp = ncomp,
-    family = family, verbose = FALSE,
-    parallel = TRUE, nthreads = 8)
+  # model set-up
+  lambda = list(B = 0, A = 0, U = penalty, V = 0)
+  ctr.init = list(method = "ols", type = "link")
+  ctr.alg = list(normalize = FALSE, maxiter = maxiter, size = c(100, 20),
+                 rate0 = stepsize, eps = 1e-16, nafill = 1, tol = tol,
+                 damping = 1e-3, verbos = verbose, frequency = 100)
 
   # model fitting
   time0 = proc.time()
-  fit = sgdGMF::cpp.fit.bsgd(
-    Y = y, X = x, B = init$B, A = init$A, Z = z, U = init$U, V = init$V,
-    ncomp = ncomp, familyname = familyname, linkname = linkname,
-    lambda = c(0,0,1,0), maxiter = maxiter, rate0 = stepsize,
-    size1 = 100, size2 = 20, eps = 1e-08, nafill = 1, tol = tol,
-    damping = 1e-03, verbose = verbose, frequency = 100)
+  memory = peakRAM::peakRAM(
+    fit <- sgdGMF::sgdgmf.fit(Y = y, X = x, Z = z, family = family, ncomp = ncomp,
+                              method = "sgd", sampling = "block", penalty = lambda,
+                              control.init = ctr.init, control.alg = ctr.alg))
   timef = proc.time()
 
-  bz = fit$U[, (p+1):(p+q)]
-  bx = fit$V[, 1:p]
-  u = fit$U[, (p+q+1):(p+q+ncomp)]
-  v = fit$V[, (p+q+1):(p+q+ncomp)]
+  bz = fit$A
+  bx = fit$B
+  u = fit$U
+  v = fit$V
 
   # Latent factor normalization
   uv = tcrossprod(u, v)
@@ -1856,9 +1362,9 @@ fit.C.bsgd = function (
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 
-
-
+## END OF FILE ----
