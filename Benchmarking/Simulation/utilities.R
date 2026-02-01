@@ -319,23 +319,6 @@ fit.gllvm = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
 
   # Output
   list(
@@ -348,7 +331,7 @@ fit.gllvm = function (
     eta = eta,
     mu = mu,
     tsne = scale(tsne$Y),
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -408,24 +391,6 @@ fit.gfmam = function(
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "GFM-AM",
@@ -438,7 +403,7 @@ fit.gfmam = function(
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -498,24 +463,6 @@ fit.gfmvem = function(
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "GFM-VEM",
@@ -528,7 +475,7 @@ fit.gfmvem = function(
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -588,24 +535,6 @@ fit.coapf = function(
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "COAP",
@@ -618,7 +547,7 @@ fit.coapf = function(
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -667,24 +596,6 @@ fit.glmpca = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "glmPCA",
@@ -697,7 +608,7 @@ fit.glmpca = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = fit$dev,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -746,24 +657,6 @@ fit.avagrad = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "AvaGrad",
@@ -776,7 +669,7 @@ fit.avagrad = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = fit$dev,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -825,24 +718,6 @@ fit.fisher = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "Fisher",
@@ -855,7 +730,7 @@ fit.fisher = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = fit$dev,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -916,24 +791,6 @@ fit.nbwave = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  # Explained deviance metrics
-  # rss  =  RSS(y, mu)
-  # rmse = RMSE(y, mu)
-  # cosd = COSD(y, mu)
-  # dev  = RDEV(y, mu, family = family)
-
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "NBWaVE",
@@ -946,7 +803,7 @@ fit.nbwave = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -979,18 +836,6 @@ fit.nmf = function (
   tsne = Rtsne::Rtsne(fit@fit@W, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "NMF",
@@ -1003,7 +848,7 @@ fit.nmf = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -1030,18 +875,6 @@ fit.nnlm = function (
   tsne = Rtsne::Rtsne(fit$W, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "NMF+",
@@ -1054,7 +887,7 @@ fit.nnlm = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = fit$nkl,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -1086,18 +919,6 @@ fit.cmf = function (
   tsne = Rtsne::Rtsne(t(fit$matrices$A), dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "CMF",
@@ -1110,7 +931,7 @@ fit.cmf = function (
     mu = mu,
     tsne = scale(tsne$Y),
     dev = NULL,
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -1170,18 +991,6 @@ fit.airwls = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "AIRWLS",
@@ -1195,7 +1004,7 @@ fit.airwls = function (
     phi = fit$phi,
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -1253,18 +1062,6 @@ fit.newton = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "Newton",
@@ -1278,7 +1075,7 @@ fit.newton = function (
     phi = fit$phi,
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
@@ -1336,18 +1133,6 @@ fit.block.sgd = function (
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
                       num_threads = NCORES, verbose = verbose)
 
-  error = NULL
-  if (!is.null(train) && !is.null(test)) {
-    error = data.frame(
-      rss  = c(rss(train, mu), rss(test, mu)),
-      cosd = c(cosdist(train, mu), cosdist(test, mu)),
-      dev  = c(expdev(train, mu, family = family),
-               expdev(test, mu, family = family)))
-
-    colnames(error) = c("RSS", "Cos", "Dev")
-    rownames(error) = c("Train", "Test")
-  }
-
   # Output
   list(
     model = "SGD",
@@ -1361,7 +1146,7 @@ fit.block.sgd = function (
     phi = fit$phi,
     tsne = scale(tsne$Y),
     dev = fit$trace[,2],
-    error = error,
+    error = NULL,
     time = timef - time0,
     memory = memory)
 }
