@@ -6,9 +6,9 @@ source("Benchmarking/Simulation/simulation_MAIN.R")
 source("Benchmarking/Simulation/simulation_NB.R")
 
 # Then, figures are made for the summary statistics and the tSNE projections.
-source("Benchmarking/Simulation/plot_sim_example.R")
+source("Benchmarking/Simulation/plot_sim_example_MAIN.R")
 
-# Simularly, figures are made for the summary statistics in function of the
+# Similarly, figures are made for the summary statistics in function of the
 # matrix dimensions and latent space rank.
 source("Benchmarking/Simulation/plot_sim_summary_MAIN.R")
 source("Benchmarking/Simulation/plot_sim_summary_NB.R")

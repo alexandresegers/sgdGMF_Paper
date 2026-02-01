@@ -36,17 +36,12 @@ COLORS = hcl(h = seq(15, 375, length = 13), l = 65, c = 100)[1:12]
 load.data = function (n, m, d, i) {
 
   # Define the file path and name
-  # filepath = FILEPATH
-  # fileid = paste("_sbubble", "_n", n, "_m", m, "_d", d, "_i", i, sep = "")
-  # filename = paste("summary", fileid, ".csv", sep = "")
   filepath = FILEPATH
-  filezip = "summary_sim.zip"
+  filezip = "summary_sim_MAIN.zip"
   fileid = paste("_n", n, "_m", m, "_d", d, "_i", i, sep = "")
   filename = paste("summary_sim", fileid, ".csv", sep = "")
 
   # Load the data-set
-  # df = read.table(file = paste(filepath, filename, sep = "/"),
-  #                 header = TRUE, dec = ".", sep = ";")
   df = read.table(unz(paste(filepath, filezip, sep = "/"), filename),
                   header = TRUE, dec = ".", sep = ";")
 

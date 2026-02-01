@@ -242,33 +242,31 @@ plot.purity.grid = function (pur, by = 1) {
   return(plt)
 }
 
-load.data = function (n, m, d, i) {
-
-  setting = "bubble"
-  filepath = FILEPATH
-  fileid = paste("_s", setting, "_n", n, "_m", m, "_d", d, "_i", i, sep = "")
-  filename = paste("summary", fileid, ".csv", sep = "")
-
-  df = read.table(file = paste(filepath, filename, sep = "/"),
-                  header = TRUE, dec = ".", sep = ";")
-
-  return (df)
+compress.model = function(object) {
+  # Drop the unused dimensions
+  object$bx <- NULL
+  object$bz <- NULL
+  object$eta <- NULL
+  object$mu <- NULL
+  object$dev <- NULL
+  object$error <- NULL
+  object$time <- NULL
+  object$memory <- NULL
+  attr(object$tsne, "scaled:center") <- NULL
+  attr(object$tsne, "scaled:scale") <- NULL
+  # Return the compressed object
+  return(object)
 }
 
 load.data = function (n, m, d, i) {
 
   # Define the file path and name
-  # filepath = FILEPATH
-  # fileid = paste("_sbubble", "_n", n, "_m", m, "_d", d, "_i", i, sep = "")
-  # filename = paste("summary", fileid, ".csv", sep = "")
   filepath = FILEPATH
-  filezip = "summary_sim_join.zip"
+  filezip = "summary_sim_MAIN.zip"
   fileid = paste("_n", n, "_m", m, "_d", d, "_i", i, sep = "")
   filename = paste("summary_sim", fileid, ".csv", sep = "")
 
   # Load the data-set
-  # df = read.table(file = paste(filepath, filename, sep = "/"),
-  #                 header = TRUE, dec = ".", sep = ";")
   df = read.table(unz(paste(filepath, filezip, sep = "/"), filename),
                   header = TRUE, dec = ".", sep = ";")
 
@@ -316,7 +314,7 @@ filter.data = function (df, n, m, d, i) {
   return(df)
 }
 
-plot.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
+plot.summary = function (n = 5000, m = 500, d = 5, i = 25) {
 
   require(ggh4x, quietly = TRUE)
   require(ggbreak, quietly = TRUE)
@@ -331,11 +329,6 @@ plot.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
   df = df %>% dplyr::mutate(deviance = 100 * deviance)
   df = df %>% dplyr::mutate(error = 100 * error)
   df = df %>% dplyr::mutate(memory = memory * 1.048576)
-
-  # df = df[, -which(colnames(df) %in% c("iteration", "dimension", "ncomp"))]
-  # df$deviance = 100 * df$deviance
-  # df$error = 100 * df$error
-  # df = df[, -which(colnames(df) == "error")]
 
   df2 = reshape2::melt(df, id.var = "model")
 
@@ -359,11 +352,9 @@ plot.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
     geom_boxplot(alpha = 0.5) +
     facet_grid(rows = vars(variable), scales = "free_y") +
     facetted_pos_scales(y = scales) + ggtitle(title) +
-    # scale_colour_manual(values = colors) + scale_fill_manual(values = colors) +
-    # scale_color_brewer(palette = palette) + scale_fill_brewer(palette = palette) +
     theme(axis.title = element_blank(), axis.text.y = element_text(size = 10),
           axis.text.x = element_text(size = 12.5, angle = 45, hjust = 1),
-          strip.text = element_text(size = 13), strip.background = element_rect(color = "transparent"), # element_blank(),
+          strip.text = element_text(size = 13), strip.background = element_rect(color = "transparent"),
           plot.title = element_text(size = 13), legend.position = "none",
           legend.title = element_text(size = 13), legend.text = element_text(size = 10))
 
@@ -371,8 +362,9 @@ plot.summary = function (s = "bubble", n = 5000, m = 500, d = 5, i = 25) {
 }
 
 ## LOAD DATA ----
-filename = "example_sbubble_n5000_m500_d5_i25.RData"
-load(file = paste(FILEPATH, filename, sep = "/"))
+filezip = "example_sim_MAIN.zip"
+filename = "example_sim_n5000_m500_d5_i25.RData"
+load(file = unz(paste(FILEPATH, filezip, sep = "/"), filename))
 
 ## DATA EXTRACTION ----
 logcounts = as.data.frame(logcounts(sim))
@@ -386,35 +378,25 @@ family = poisson()
 n = ncol(counts)
 m = nrow(counts)
 
-# sim = data.simulation(n = 10000, m = 1000, setting = 1, seed = NULL, pca = FALSE, tsne = FALSE)
-# logcounts = t(sim$logcounts)
-# counts = t(sim$counts)
-# cells = sim$cells
-# genes = sim$genes
-# meta = sim$meta
-# groups = as.numeric(as.factor(sim$cells$Group))
-# batches = as.numeric(as.factor(sim$cells$Batch))
-# family = poisson()
-# n = ncol(counts)
-# m = nrow(counts)
-
 # PCA and t-SNE embedding
-pca = RSpectra::svds(scale(t(as.matrix(logcounts))), k = 10)$u
-tsne = Rtsne::Rtsne(pca, dims = 2, verbose = TRUE, num_threads = 8)$Y
+if (FALSE) {
+  pca = RSpectra::svds(scale(t(as.matrix(logcounts))), k = 10)$u
+  tsne = Rtsne::Rtsne(pca, dims = 2, verbose = TRUE, num_threads = 8)$Y
 
-df = data.frame(
-  x = c(minmax(pca[,1]), minmax(tsne[,1])),
-  y = c(minmax(pca[,2]), minmax(tsne[,2])),
-  group = as.factor(rep(groups, 2)),
-  batch = as.factor(rep(batches, 2)),
-  embedding = as.factor(rep(c("PCA", "tSNE"), each = n))
-)
+  df = data.frame(
+    x = c(minmax(pca[,1]), minmax(tsne[,1])),
+    y = c(minmax(pca[,2]), minmax(tsne[,2])),
+    group = as.factor(rep(groups, 2)),
+    batch = as.factor(rep(batches, 2)),
+    embedding = as.factor(rep(c("PCA", "tSNE"), each = n))
+  )
 
-ggplot(data = df, map = aes(x = x, y = y, color = group, pch = batch)) +
-  geom_point(alpha = 0.99) + facet_grid(cols = vars(embedding)) +
-  scale_color_brewer(palette = "Set2") +
-  labs(x = "PC1", y = "PC2", color = "Cell-type", pch = "Batch") +
-  theme(strip.background = element_blank())
+  ggplot(data = df, map = aes(x = x, y = y, color = group, pch = batch)) +
+    geom_point(alpha = 0.99) + facet_grid(cols = vars(embedding)) +
+    scale_color_brewer(palette = "Set2") +
+    labs(x = "PC1", y = "PC2", color = "Cell-type", pch = "Batch") +
+    theme(strip.background = element_blank())
+}
 
 ## TRAIN-TEST SPLIT ----
 X = model.matrix(~ Batch, data = cells)
@@ -442,7 +424,7 @@ if (RUN) {
   model.nbwave = fit.nbwave(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-04)
   model.gfmam = fit.gfmam(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-05)
   model.gfmvem = fit.gfmvem(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-05)
-  model.coap = fit.coap(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-06)
+  model.coap = fit.coapf(y = ctrain, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 200, tol = 1e-06)
   model.cmf = fit.cmf(y = train, x = X, z = NULL, ncomp = ncomp, family = family, verbose = FALSE, maxiter = 500)
   model.nmf = fit.nmf(y = ctrain, x = NULL, z = NULL, ncomp = ncomp, family = family, verbose = TRUE)
   model.nnlm = fit.nnlm(y = train, x = NULL, z = NULL, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 2000)
@@ -450,36 +432,31 @@ if (RUN) {
   model.newton = fit.newton(y = train, x = X, z = Z, ncomp = ncomp, family = family, verbose = TRUE, maxiter = 300, stepsize = 0.2, tol=1e-6)
   model.sgd = fit.block.sgd(y = train, x = X, z = Z, ncomp = ncomp, family = neg.bin(10), verbose = TRUE, maxiter = 2000, stepsize = 0.01, tol=1e-6)
 
-  filename = "models_sbubble_n5000_m500_d5_i25_new.RData"
+  model.pearson = compress.model(model.pearson)
+  model.deviance = compress.model(model.deviance)
+  model.avagrad = compress.model(model.avagrad)
+  model.fisher = compress.model(model.fisher)
+  model.nbwave = compress.model(model.nbwave)
+  model.gfmam = compress.model(model.gfmam)
+  model.gfmvem = compress.model(model.gfmvem)
+  model.coap = compress.model(model.coap)
+  model.cmf = compress.model(model.cmf)
+  model.nmf = compress.model(model.nmf)
+  model.nnlm = compress.model(model.nnlm)
+  model.airwls = compress.model(model.airwls)
+  model.newton = compress.model(model.newton)
+  model.sgd = compress.model(model.sgd)
+
+  filename = "models_sim_n5000_m500_d5_i25.RData"
   save(model.pearson, model.deviance, model.avagrad, model.fisher,
        model.nbwave, model.gfmam, model.gfmvem, model.coap, model.cmf,
        model.nmf, model.nnlm, model.airwls, model.newton, model.sgd,
        file = paste(FILEPATH, filename, sep = "/"))
 } else {
-  filename = "models_sbubble_n5000_m500_d5_i25_new.RData"
-  load(file = paste(FILEPATH, filename, sep = "/"))
+  filezip = "example_sim_MAIN.zip"
+  filename = "models_sim_n5000_m500_d5_i25.RData"
+  load(file = unz(paste(FILEPATH, filezip, sep = "/"), filename))
 }
-
-rbind(cbind(model = "GFM-AM", model.gfmam$memory[,-1]),
-      cbind(model = "GFM-VEM", model.gfmvem$memory[,-1]),
-      cbind(model = "COAP", model.coap$memory[,-1]),
-      cbind(model = "NBWAVE", model.nbwave$memory[,-1]),
-      cbind(model = "AIRWLS", model.airwls$memory[,-1]),
-      cbind(model = "Newton", model.newton$memory[,-1]),
-      cbind(model = "ASGD", model.sgd$memory[,-1]))
-
-init.sgd = peakRAM::peakRAM(
-  # foo <- sgdGMF::sgdgmf.init(train, X, Z, ncomp=ncomp, family = family, method="ols", type="link", savedata=FALSE)
-  foo <- sgdgmf.init.light(train, X, Z, ncomp=ncomp, family=family)
-)
-
-model.fisher$memory$Peak_RAM_Used_MiB
-model.coap$memory$Peak_RAM_Used_MiB
-model.sgd$memory$Peak_RAM_Used_MiB
-init.sgd$Peak_RAM_Used_MiB
-model.sgd$memory$Peak_RAM_Used_MiB + init.sgd$Peak_RAM_Used_MiB
-
-
 
 ## TSNE PROJECTION ----
 list.tsne = list()
