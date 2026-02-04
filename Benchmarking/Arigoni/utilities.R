@@ -15,6 +15,8 @@ suppressPackageStartupMessages({
   #library(gllvm)
   library(glmpca)
   library(NewWave)
+  library(COAP)
+
 
 
   # Low-dimensional embedding
@@ -35,6 +37,7 @@ suppressPackageStartupMessages({
   library(ggpubr)
   library(GGally)
   library(factoextra)
+  library(peakRAM)
 })
 
 ## GLOBAL VARIABLES ----
@@ -114,8 +117,8 @@ expdev <- function (y, x, family) {
   m <- mean(y, na.rm = TRUE)
   # nulldev <- mean(family$dev.resids(y, m, 1), na.rm = TRUE)
   # fitdev <- mean(family$dev.resids(y, x, 1), na.rm = TRUE)
-  dev0 <- matrix.deviance(m, y, family = family)
-  devf <- matrix.deviance(x, y, family = family)
+  dev0 <- sgdGMF:::matrix.deviance(m, y, family = family)
+  devf <- sgdGMF:::matrix.deviance(x, y, family = family)
   return (devf / dev0)
 }
 
@@ -145,17 +148,18 @@ error.matrix = function (y, ...) {
 # Summary error matrix + silhouette
 error.summary = function (y, g, ...) {
   object.list = list(...)
-  error = data.frame(Model = c(), Time = c(), RSS = c(), Cos = c(), Dev = c(), Sil = c())
+  error = data.frame(Model = c(), Time = c(), Memory = c(), RSS = c(), Cos = c(), Dev = c(), Sil = c())
   for (k in 1:length(object.list)) {
     .object = object.list[[k]]
     .mu = .object$mu
     .model = .object$model
     .time = ifelse(is.null(.object$time), NA, round(.object$time[3], 4))
+    .memory = ifelse(is.null(.object$memory), NA, round(unlist(.object$memory[4]),1))
     .rss = ifelse(is.null(.mu), NA, round(rss(y, .mu), 4))
     .cos = ifelse(is.null(.mu), NA, round(cosdist(y, .mu), 4))
     .dev = ifelse(is.null(.mu), NA, round(expdev(y, .mu, family = poisson()), 4))
     .sil = ifelse(is.null(.object$tsne), NA, round(avgsil(.object$tsne, g), 4))
-    .error = data.frame(Model = .model, Time = .time, RSS = .rss, Cos = .cos, Dev = .dev, Sil = .sil)
+    .error = data.frame(Model = .model, Time = .time, Memory = .memory, RSS = .rss, Cos = .cos, Dev = .dev, Sil = .sil)
     error = rbind(error, .error)
     rownames(error)[k] = k
   }
@@ -209,25 +213,6 @@ plot.eigvectors = function (u, idx = 1:2, title = "Biplot") {
 ## TRAIN-TEST SPLIT ----
 
 ## Train-test split
-train.test.split <- function (y, test = 0.3) {
-
-  n = nrow(y)
-  m = ncol(y)
-
-  mask <- cbind(x = sample.int(n = n, size = floor(test * n * m), replace = TRUE),
-                y = sample.int(n = m, size = floor(test * n * m), replace = TRUE))
-
-  ycc <- y
-  yna <- y
-  ynn <- y
-
-  ynn[mask] <- NA
-  isna <- is.na(ynn)
-
-  yna[!isna] <- NA
-
-  list(mask = mask, isna = isna, ycc = ycc, yna = yna, ynn = ynn)
-}
 
 train.test.split <- function (y, test = 0.3) {
 
@@ -353,7 +338,8 @@ fit.glmpca = function (
 
   # glmPCA model fitting
   time0 = proc.time()
-  fit = glmpca::glmpca(
+  memory = peakRAM::peakRAM(
+    fit <- glmpca::glmpca(
     Y = y, X = z, Z = x,
     L = ncomp,
     fam = "poi",
@@ -362,7 +348,7 @@ fit.glmpca = function (
     ctl = list(verbose = verbose,
                maxIter = maxiter,
                tol = tol)) %>%
-    suppressWarnings()
+    suppressWarnings())
   timef = proc.time()
 
   # Latent factor normalization
@@ -412,7 +398,8 @@ fit.glmpca = function (
     tsne = tsne$Y,
     dev = fit$dev,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 ## NBWaVE
@@ -437,7 +424,8 @@ fit.nbwave = function (
 
   # NBWaVE model fitting
   time0 = proc.time()
-  fit = NewWave::newFit(
+  memory = peakRAM::peakRAM(
+    fit <- NewWave::newFit(
     Y = t(y),
     X = x,
     V = z,
@@ -447,7 +435,7 @@ fit.nbwave = function (
     maxiter_optimize = maxiter,
     stop_epsilon = tol,
     children = NCORES) %>%
-    suppressWarnings()
+    suppressWarnings())
   timef = proc.time()
 
   # Latent factor normalization
@@ -501,9 +489,84 @@ fit.nbwave = function (
     tsne = tsne$Y,
     dev = NULL,
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
+
+fit.coap = function(
+    y, x = NULL, z = NULL, ncomp = 2,
+    maxiter = 1000, tol = 1e-5,
+    verbose = FALSE, ncores = 4) {
+
+  n = nrow(y)
+  m = ncol(y)
+
+  if (is.null(x)) x = matrix(1, nrow = n, ncol = 1)
+  if (is.null(z)) z = matrix(1, nrow = m, ncol = 1)
+
+  # COAP model fitting
+  time0 = proc.time()
+  memory = peakRAM::peakRAM(
+    fit <- COAP::RR_COAP(
+      X_count = y,
+      Z = x,
+      q = ncomp,
+      epsELBO = tol,
+      maxIter = maxiter,
+      verbose = verbose,
+      joint_opt_beta = FALSE,
+      fast_svd = FALSE) %>%
+      suppressWarnings() %>%
+      suppressMessages())
+  timef = proc.time()
+
+  # Latent factor normalization
+  b = fit$bbeta
+  xb = tcrossprod(x, b)
+  a = rep(0, m)
+  az = matrix(0, nrow = n, ncol = m)
+  uv = tcrossprod(fit$H, fit$B)
+
+  # Fitted values
+  eta = xb + az + uv
+  mu = poisson()$linkinv(eta)
+
+  # Orthogonalization
+  uv = svd::propack.svd(uv, neig = ncomp)
+
+  # tSNE low dimensional embedding
+  tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
+                      num_threads = ncores, verbose = verbose)
+
+  error = NULL
+  if (!is.null(train) && !is.null(test)) {
+    error = data.frame(
+      rss  = c(rss(train, mu), rss(test, mu)),
+      cosd = c(cosdist(train, mu), cosdist(test, mu)),
+      dev  = c(expdev(train, mu, family = family),
+               expdev(test, mu, family = family)))
+
+    colnames(error) = c("RSS", "Cos", "Dev")
+    rownames(error) = c("Train", "Test")
+  }
+
+  # Output
+  list(
+    model = "COAP",
+    u = uv$u,
+    v = uv$v,
+    d = uv$d,
+    beta = b,
+    alpha = a,
+    eta = eta,
+    mu = mu,
+    tsne = scale(tsne$Y),
+    dev = NULL,
+    error = error,
+    time = timef - time0,
+    memory = memory)
+}
 
 ## Averaged stochastic gradient descent
 fit.R.bsgd = function (
@@ -523,8 +586,7 @@ fit.R.bsgd = function (
     Y = y, X = x, Z = z,
     ncomp = ncomp,
     family = family,
-    method = "sgd",
-    sampling = "block",
+    method = "b-sgd",
     penalty = list(u = penalty, v = penalty, b = 0),
     init = list(init = "svd", niter = 10),
     control = list(maxiter = maxiter,
@@ -578,7 +640,8 @@ fit.R.bsgd = function (
 fit.C.bsgd = function (
     y, x = NULL, z = NULL, ncomp = 2, family = poisson(),
     penalty = 1, maxiter = 200, stepsize = 0.01, tol = 1e-05,
-    verbose = FALSE, train = NULL, test = NULL, size1 = 100, size2 = 100) {
+    verbose = FALSE, train = NULL, test = NULL, size1 = 100, size2 = 100,
+    savedata = FALSE) {
 
   n = nrow(y)
   m = ncol(y)
@@ -599,10 +662,15 @@ fit.C.bsgd = function (
     familyname = "negbinom"
   }
   time0 = proc.time()
-  fit = sgdGMF::sgdgmf.fit(Y = y, X = x, Z = z, ncomp = ncomp, family = family,
-                           control.alg = list(maxiter = maxiter, size = c(size1, size2)),
-                           control.init = list(method = "ols", type = "link"),
+  memory = peakRAM::peakRAM(
+    fit <- sgdGMF::sgdgmf.fit(Y = y, X = x, Z = z, ncomp = ncomp, family = family,
+                           control.alg = list(maxiter = maxiter, size = c(size1, size2),
+                                              savedata = savedata, normalize = F),
+                           control.init = list(method = "light", type = "link",
+                                               normalize = F),
                            method = "sgd", sampling = "block")
+    )
+  timef = proc.time()
 
   # init = sgdGMF::init.param(
   #   Y = y, X = x, Z = z, ncomp = ncomp, family = family,
@@ -615,7 +683,6 @@ fit.C.bsgd = function (
   #   lambda = c(0,0,1,0), maxiter = maxiter, rate0 = stepsize,
   #   size1 = size1, size2 = size2, eps = 1e-08, nafill = 1, tol = tol,
   #   damping = 1e-03, verbose = verbose, frequency = 100)
-  timef = proc.time()
 
   # bz = fit$U[, (p+1):(p+q)]
   # bx = fit$V[, 1:p]
@@ -631,7 +698,8 @@ fit.C.bsgd = function (
   uv = tcrossprod(u, v)
   uv = svd::propack.svd(uv, neig = ncomp)
 
-  mu = fit$mu
+  eta <- x %*% t(fit$B) + fit$A %*% t(z) + fit$U %*% t(fit$V)
+  mu <- exp(eta)
 
   # tSNE low dimensional embedding
   tsne = Rtsne::Rtsne(uv$u, dims = 2, partial_pca = FALSE,
@@ -652,18 +720,20 @@ fit.C.bsgd = function (
   # Output
   list(
     model = "B-SGD",
+    fit = fit,
     u = uv$u,
     v = uv$v,
     d = uv$d,
     bx = bx,
     bz = bz,
-    eta = fit$eta,
-    mu = fit$mu,
+    eta = eta,
+    mu = mu,
     phi = fit$phi,
     tsne = tsne$Y,
     dev = fit$trace[,2],
     error = error,
-    time = timef - time0)
+    time = timef - time0,
+    memory = memory)
 }
 
 

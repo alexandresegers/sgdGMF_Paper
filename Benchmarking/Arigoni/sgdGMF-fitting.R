@@ -1,10 +1,4 @@
-#' ---
-#' title: "Model selection and hvg influence"
-#' output: html_document
-#' date: '2024-03-10'
-#' ---
-#' 
-## --------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------
 source("utilities.R")
 library(sgdGMF)
 library(dplyr)
@@ -12,8 +6,8 @@ library(dplyr)
 sim_full <- readRDS(file = "Data/BE1/final/sce.RDS")
 
 
-#' 
-## --------------------------------------------------------------------------------------------------
+
+## ---------------------------------------------------------------------------------------
 set.seed(100)
 
 ## LOAD DATA ----
@@ -39,11 +33,11 @@ Y[] = t(counts)
 
 family = poisson()
 method = "sgd"
-sampling = "sampling"
+sampling = "block"
 control = list("parallel" = TRUE, "nthreads" = 8)
 
 gmf.fit.list = list()
-ncomp <- c(1:10, 15, 20, 30, 40, 50)
+ncomp <- c(1:20, 25, 30, 40, 50)
 control.init = list(method = "ols", type = "link")
 control.alg = list(maxiter = 1000, size = c(100,100), frequency = 250)
 
@@ -51,7 +45,7 @@ for (i in 1:length(ncomp)) {
   cat(" Rank =", ncomp[i], "\n")
   # Fit the model
   fit = sgdGMF::sgdgmf.fit(Y, X, Z, ncomp = ncomp[i], family = family,
-                           method = method, sampling = sampling, 
+                           method = method, sampling = sampling,
                            control.init = control.init, 
                            control.alg = control.alg)
   saveRDS(object = fit, file = paste0("Output_models/sgdGMF-B-SGD-fit-", ncomp[i], ".RDS"))
@@ -64,5 +58,3 @@ saveRDS(object = gmf.fit.list, file = paste0("Output_models/sgdGMF-B-SGD-fit-lis
   
   
 
-#' 
-#' 

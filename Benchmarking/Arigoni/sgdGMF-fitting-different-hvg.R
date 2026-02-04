@@ -1,18 +1,12 @@
----
-title: "Model selection and hvg influence"
-output: html_document
-date: '2024-03-10'
----
-
-```{r}
+## ---------------------------------------------------------------------------------------
 source("utilities.R")
 library(sgdGMF)
 library(dplyr)
 
 sim_full <- readRDS(file = "Data/BE1/final/sce.RDS")
-```
 
-```{r}
+
+## ---------------------------------------------------------------------------------------
 set.seed(100)
 
 ## LOAD DATA ----
@@ -60,6 +54,4 @@ for(j in c(100,200,1000,1500,2000)){
 }
   
   
-```
-
 

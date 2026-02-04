@@ -1,11 +1,4 @@
-#' ---
-#' title: "Constructing Figures for Arigoni benchmark"
-#' output: html_document
-#' date: '2024-05-28'
-#' ---
-#' 
-#' 
-## --------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------
 
 ## Import the libraries ----
 library(dplyr)
@@ -102,7 +95,7 @@ plt_eigs <- df_eigenvalues %>%
 print(plt_eigs)
 
 # Cell-specific purity
-labels_purity <- c("Mean cluster purity")
+labels_purity <- c("Mean cell-line purity")
 names(labels_purity) <- "1"
 
 plt_purity <- df_purity %>%
@@ -129,7 +122,6 @@ print(plt_purity)
 plt_gof = ggpubr::ggarrange(plt_eigs, plt_dev, plt_purity,
                             nrow = 3, ncol = 1, align = "v",
                             heights = c(1,3,2), labels = c("A", "", "B"), hjust = -0.5, vjust = 0.7)
-
 
 plt_gof = ggpubr::annotate_figure(plt_gof, top = text_grob("Model selection measures", size = 14))
 
@@ -261,7 +253,9 @@ plt_mat30 = myheatmap(mat30, annotation_row, annotation_col, annotation_colors, 
 
 
 plt_mat = ggpubr::ggarrange(
-  plt_mat6, plt_mat15, plt_mat30,
+  myheatmap(mat6, annotation_row, annotation_col, annotation_colors, main = "Rank = 9"), 
+  myheatmap(mat15, annotation_row, annotation_col, annotation_colors, main = "Rank = 15"), 
+  myheatmap(mat30, annotation_row, annotation_col, annotation_colors, main = "Rank = 30"),
   nrow = 1, ncol = 3, common.legend = FALSE)
 
 print(plt_mat)
@@ -271,7 +265,7 @@ print(plt_mat)
 plt_grid = ggpubr::ggarrange(
   ggpubr::ggarrange(plt_tsne, NULL, plt_mat, NULL,
                     nrow = 4, align = "hv", heights = c(2,0.05,1, 0.1)),
-  ggpubr::ggarrange(NULL, lgnd_tsne_true, lgnd_tsne_clust, NULL,
+  ggpubr::ggarrange(NULL, g_legend(plt_tsne_true), g_legend(plt_tsne_clust), NULL,
                     nrow = 4, align = "hv", heights = c(.5,1,1,.5)),
   nrow = 1, ncol = 2, widths = c(10,2), labels = c("C", NULL)
 )
@@ -299,70 +293,97 @@ ggsave(filename = filename, path = filepath, plot = plt,
 
 
 
-#' 
-#' 
-## --------------------------------------------------------------------------------------------------
+
+## ---------------------------------------------------------------------------------------
 ## Plot: Comparison NewWave/glmPCA ----
 
-df_errors <- readRDS(file = paste0(path, "/df_errors.RDS"))
-purity_newwave_comparison_mean <- readRDS(file = paste0(path,
-                                                        "/purity_newwave_comparison_mean.RDS"))
-df_tsne_newwave_comparison <- readRDS(file = paste0(path, "/df_tsne_newwave_comparison.RDS"))
+colScale <- scale_colour_manual(name = "Method", 
+                                values = c("AvaGrad" = "#7CAE00",
+                                           "Fisher" = "#00BA38",
+                                 "NBWaVe" = "#00C08B",
+                                 "COAP" = "#619CFF",
+                                 "aSGD-NB" = "#C77CFF",
+                                 "aSGD-Poisson" = "#FF64B0"))
 
+df_errors <- readRDS(file = paste0(path, "/df_errors.RDS")) %>% filter(Model %in% c("Avagrad", "Fisher", "NewWave", "SGD-NB", "SGD-Poisson", "COAP-tol5"))
+
+purity_newwave_comparison_mean <- readRDS(file = paste0(path,
+                                                        "/purity_newwave_comparison_mean.RDS")) %>% 
+  filter(method %in% c("Avagrad", "Fisher", "NewWave", "SGD-NB", "SGD-Poisson", "COAP-tol5"))
+df_tsne_newwave_comparison <- readRDS(file = paste0(path, "/df_tsne_newwave_comparison.RDS")) %>% 
+  filter(method %in% c("Avagrad", "Fisher", "NewWave", "SGD-NB", "SGD-Poisson", "COAP-tol5"))
+
+df_errors$Model = factor(df_errors$Model, 
+                         labels =  c("AvaGrad", "Fisher", "NBWaVe", "COAP", "aSGD-NB", "aSGD-Poisson"),
+                  levels= c("Avagrad", "Fisher", "NewWave", "COAP-tol5", "SGD-NB", "SGD-Poisson"))
+purity_newwave_comparison_mean$method = factor(purity_newwave_comparison_mean$method, 
+                         labels =  c("AvaGrad", "Fisher", "NBWaVe", "COAP", "aSGD-NB", "aSGD-Poisson"),
+                  levels= c("Avagrad", "Fisher", "NewWave", "COAP-tol5", "SGD-NB", "SGD-Poisson"))
+df_tsne_newwave_comparison$method = factor(df_tsne_newwave_comparison$method, 
+                         labels =  c("AvaGrad", "Fisher", "NBWaVe", "COAP", "SGD-NB", "SGD-Poisson"),
+                  levels= c("Avagrad", "Fisher", "NewWave", "COAP-tol5", "SGD-NB", "SGD-Poisson"))
+df_tsne_newwave_comparison[df_tsne_newwave_comparison$method=="COAP",1:2] <- df_tsne_newwave_comparison[df_tsne_newwave_comparison$method=="COAP",1:2] / max(abs(df_tsne_newwave_comparison[df_tsne_newwave_comparison$method=="COAP",1:2])) * 40
 
 pltime <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = log10(Time), color = Model)) + 
   geom_point(size = 4) + 
   theme_bw() + 
-  theme(axis.title.x = element_blank()) + ylim(c(1,4.3))
+  theme(axis.title.x = element_blank()) + ylim(c(1,4.3)) + colScale
+
+pltmem <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Memory*1.04858/1024, color = Model)) + 
+  geom_point(size = 4) + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank())  + ylab("Memory (GB)") +
+  ylim(c(0.85,4.2)) + colScale
 
 prss <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = RSS, color = Model)) + 
   geom_point(size = 4) + 
     theme_bw() + 
   theme(axis.title.x = element_blank())+ 
-  ylim(c(0.118,0.17))
+  ylim(c(0.118,0.17)) + colScale
 
 pdev <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Dev, color = Model)) + 
   geom_point(size = 4) + 
     theme_bw() + 
   theme(axis.title.x = element_blank()) + 
-  ylim(c(0.10,0.18))
+  ylim(c(0.10,0.18)) + colScale
 
 psil <- ggplot(data = df_errors %>% filter(Sample == "test"), map = aes(x = Model, y = Sil, color = Model)) + 
   geom_point(size = 4) + 
     theme_bw() + 
-  theme(axis.title.x = element_blank())
+  theme(axis.title.x = element_blank()) + colScale
 
 
 ploterrors = ggpubr::ggarrange(
   pltime + theme(axis.text.x = element_blank(),
                  axis.ticks.x = element_blank()), 
-  prss+ theme(axis.text.x = element_blank(),
-                 axis.ticks.x = element_blank()), 
-  pdev + theme(axis.text.x = element_text(size = 7.5)),  
+  pltmem + theme(axis.text.x = element_blank(),
+                 axis.ticks.x = element_blank()),
+  #prss+ theme(axis.text.x = element_blank(),
+  #              axis.ticks.x = element_blank()), 
+  pdev + ylab("Deviance") + theme(axis.text.x = element_text(size = 7.5)),  
   nrow = 3, ncol = 1, legend = "none",
   align = "v"
 ) 
 
-ploterrors
+#ploterrors
 
 
 purity_newwave_lineplot <- ggplot(data = purity_newwave_comparison_mean, aes(x = maximum, y = mean, col = method)) + geom_point() + 
   geom_line(aes(x = as.numeric(maximum), y = mean, col = method)) + 
   theme_bw() + 
-  ylab("Mean purity per celltype") + 
+  ylab("Mean cell-line purity") + 
   theme(axis.title.x = element_blank(),
-        axis.text = element_text(size = 7.5),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 12)) 
+        axis.text = element_text(size = 7.5)) +
+  colScale
 
 
-purity_newwave_lineplot
+#purity_newwave_lineplot
 
 
 
 p_tsne_newwave_comparison <- ggplot(data = df_tsne_newwave_comparison, aes(x = T1, y = T2, col = celltype)) + 
   geom_point(size = 0.5) +
-  facet_wrap(~method, ncol = 5) + labs(col = "Celltypes") + 
+  facet_wrap(~method, ncol = 3) + labs(col = "Celltypes") + 
   theme_bw() + 
   theme(axis.title = element_blank(),
         axis.text = element_blank(),
@@ -370,24 +391,21 @@ p_tsne_newwave_comparison <- ggplot(data = df_tsne_newwave_comparison, aes(x = T
         legend.position = "right",
         panel.grid = element_blank()) + guides(color = guide_legend(override.aes = list(size = 4)))
 
-p_tsne_newwave_comparison
+#p_tsne_newwave_comparison
 
 
-legend_1 <- get_legend(p_tsne_newwave_comparison)
-legend_2 <- get_legend(purity_newwave_lineplot)
-
-plot(legend_1)
-plot(legend_2)
-legends <- ggarrange(legend_1, legend_2, nrow = 2, align = "v")
-legends
+legends <- ggarrange(get_legend(p_tsne_newwave_comparison), get_legend(purity_newwave_lineplot), nrow = 2, align = "v")
+#legends
 
 pnewwave <- ggarrange(ggarrange(p_tsne_newwave_comparison + 
-                                    theme(legend.position = "none"), 
+                                    theme(legend.position = "none",
+  plot.margin = margin(0.5, 0.2, 0, 1, "cm")), 
           ggarrange(ploterrors + theme(legend.position = "none"),
-                    purity_newwave_lineplot + theme(legend.position = "none")),
+                    purity_newwave_lineplot + theme(legend.position = "none"),
+                    labels = list("B","C")),
           nrow = 2),
-          legends, widths = c(0.875, 0.125))
-pnewwave
+          legends, widths = c(0.875, 0.125), labels = list("A", ""))
+#pnewwave
 
 
 filepath = "Output_models"
@@ -399,4 +417,4 @@ ggsave(filename = filename, path = filepath, plot = pnewwave,
        width = zoom  * width, height = zoom * height)
 
 
-#' 
+

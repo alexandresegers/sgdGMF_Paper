@@ -1,4 +1,4 @@
-## --------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------
 ## WORKSPACE SETUP ----
 
 ## Clean the workspace
@@ -14,9 +14,8 @@ library(MASS)
 library(sgdGMF)
 library(dplyr)
 
-#' 
-#' 
-## --------------------------------------------------------------------------------------------------
+
+## ---------------------------------------------------------------------------------------
 set.seed(100)
 ## DATA SIMULATION ----
 SAVE = FALSE
@@ -64,15 +63,29 @@ ctrain = naive.completion(train)
 saveRDS(list("train" = train, "test" = test), file = "Output_models/train_test_15_ncomp.RDS")
 
 
-
 model.bsgd_poisson = fit.C.bsgd(y = train, x = X, z = Z, ncomp = ncomp, 
                                 family = family, verbose = FALSE, maxiter = 1000)
-model.bsgd = fit.C.bsgd(y = train, x = X, z = Z, ncomp = ncomp, family = neg.bin(1), 
+model.bsgd = fit.C.bsgd(y = train, x = X, z = Z, ncomp = ncomp, family = neg.bin(100), 
                         verbose = FALSE, maxiter = 1000)
-model.nbwave = fit.nbwave(y = ctrain, x = X, z = Z, ncomp = ncomp, family = neg.bin(1), 
+model.nbwave = fit.nbwave(y = ctrain, x = X, z = Z, ncomp = ncomp, family = neg.bin(100), 
                           verbose = FALSE, maxiter = 100, tol = 1e-04)
 avagrad <- fit.glmpca(y=ctrain, x=X, z=Z, ncomp=ncomp, family=family, method = "avagrad", verbose= FALSE, maxiter=1000, tol=1e-04)
 fisher <- fit.glmpca(y=ctrain, x=X, z=Z, ncomp=ncomp, family=family, method = "fisher", verbose= FALSE, maxiter=200, tol=1e-05)
+
+
+coap_1 <- fit.coap(
+    y = ctrain, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-5,
+    verbose = FALSE, ncores = 4)
+coap_2 <- fit.coap(
+    y = ctrain, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-4,
+    verbose = FALSE, ncores = 4)
+coap_3 <- fit.coap(
+    y = ctrain, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-6,
+    verbose = FALSE, ncores = 4)
+
 
 ## MODEL CHECK ----
 
@@ -83,9 +96,14 @@ cat("B-SGD:  ", model.bsgd$time[3], "s \n")
 cat("B-SGD-Poisson:  ", model.bsgd_poisson$time[3], "s \n")
 }
 
-results <- list("NewWave" = model.nbwave, "NB-BSGD" = model.bsgd, 
+results <- list("NewWave" = model.nbwave, 
+                "NB-BSGD" = model.bsgd, 
                 "Poisson-BSGD" = model.bsgd_poisson, 
-                "Avagrad" = avagrad, "Fisher" = fisher)
+                "Avagrad" = avagrad, 
+                "Fisher" = fisher,
+                "COAP1" = coap_1,
+                "COAP2" = coap_2,
+                "COAP3" = coap_3)
 saveRDS(results, file = "Output_models/NewWave_comparison_results_train_test_15_ncomp.RDS")
 
 
@@ -93,15 +111,26 @@ saveRDS(results, file = "Output_models/NewWave_comparison_results_train_test_15_
 
 model.bsgd_poisson = fit.C.bsgd(y = Y, x = X, z = Z, ncomp = ncomp, family = family, 
                                 verbose = FALSE, maxiter = 1000)
-model.bsgd = fit.C.bsgd(y = Y, x = X, z = Z, ncomp = ncomp, family = neg.bin(1), 
+model.bsgd = fit.C.bsgd(y = Y, x = X, z = Z, ncomp = ncomp, family = neg.bin(100), 
                         verbose = FALSE, maxiter = 1000)
-model.nbwave = fit.nbwave(y = Y, x = X, z = Z, ncomp = ncomp, family = neg.bin(1), 
+model.nbwave = fit.nbwave(y = Y, x = X, z = Z, ncomp = ncomp, family = neg.bin(100), 
                           verbose = FALSE, maxiter = 100, tol = 1e-04)
 avagrad <- fit.glmpca(y=Y, x=X, z=Z, ncomp=ncomp, family=family, method = "avagrad", 
                       verbose= FALSE, maxiter=1000, tol=1e-04)
 fisher <- fit.glmpca(y=Y, x=X, z=Z, ncomp=ncomp, family=family, method = "fisher",
                      verbose= FALSE, maxiter=200, tol=1e-05)
-
+coap_1 <- fit.coap(
+    y = Y, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-5,
+    verbose = FALSE, ncores = 4)
+coap_2 <- fit.coap(
+    y = Y, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-4,
+    verbose = FALSE, ncores = 4)
+coap_3 <- fit.coap(
+    y = Y, x = X, z = Z, ncomp = ncomp,
+    maxiter = 1000, tol = 1e-6,
+    verbose = FALSE, ncores = 4)
 ## MODEL CHECK ----
 
 # Execution time
@@ -113,9 +142,10 @@ cat("B-SGD-Poisson:  ", model.bsgd_poisson$time[3], "s \n")
 
 results <- list("NewWave" = model.nbwave, "NB-BSGD" = model.bsgd, 
                 "Poisson-BSGD" = model.bsgd_poisson, "Avagrad" = avagrad, 
-                "Fisher" = fisher)
+                "Fisher" = fisher,
+                "COAP1" = coap_1,
+                "COAP2" = coap_2,
+                "COAP3" = coap_3)
 saveRDS(results, file = "Output_models/NewWave_comparison_results_all_data_15_ncomp.RDS")
 
 
-#' 
-#' 

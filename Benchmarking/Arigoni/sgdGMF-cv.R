@@ -1,20 +1,13 @@
-#' ---
-#' title: "Untitled"
-#' output: html_document
-#' date: '2024-03-15'
-#' ---
-#' 
-## ----setup, include=FALSE--------------------------------------------------------------------------
+## ----setup, include=FALSE---------------------------------------------------------------
 knitr::opts_chunk$set(echo = TRUE)
 
-#' 
-#' 
-## --------------------------------------------------------------------------------------------------
+
+## ---------------------------------------------------------------------------------------
 library(sgdGMF)
 library(dplyr)
 
-#' 
-## --------------------------------------------------------------------------------------------------
+
+## ---------------------------------------------------------------------------------------
 set.seed(100)
 
 sim_full <- readRDS(file = "Data/BE1/final/sce.RDS")
@@ -44,8 +37,9 @@ control.init = list(method = "ols", type = "link")
 control.alg = list(maxiter = 1000, size = c(100,25), frequency = 250)
 control.cv = list(nfolds = 5)
 
-gmf.fit = sgdgmf.cv(Y, X, Z, ncomps = c(1:10,15,20,30,40,50), family = family,
-                    method = method, sampling = sampling,
+gmf.fit = sgdgmf.cv(Y, X, Z, ncomps = c(1:20,25,30,40,50), family = family,
+                    method = method, 
+                    sampling = sampling,
                     control.init = control.init, control.alg = control.alg, control.cv = control.cv)
 
 saveRDS(gmf.fit, file = "Output_models/sgdGMF-B-SGD-cv.RDS")
