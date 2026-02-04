@@ -50,6 +50,14 @@ source(paste(path_arigoni, "Figure_preparation.R", sep="/"))
 # We here construct the plots of the manuscript.
 source(paste(path_arigoni, "Figures_construction.R", sep="/"))
 
+# sgdGMF is ran on different number of high variable genes
+source(paste(path_arigoni, "sgdGMF-fitting-different-hvg.R", sep="/"))
+
+# Plotting the figure for the sgdGMF results on different number of high
+# variable genes
+source(paste(path_arigoni, "Review_additional_figures_hvg.R", sep="/"))
+
+
 
 
 # ----------- CaseStudy benchmark
@@ -230,32 +238,32 @@ for (i in c(1:5)){
 
 # These scripts are the old version without memory computation.
 #
-# source(paste(path_casestudy, "CaseStudy_sgdGMF_100k_1000_1000_250.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_sgdGMF_200k_2000_1000_250.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_sgdGMF_300k_3000_1000_250.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_100k_avagrad_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_200k_avagrad_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_300k_avagrad_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_100k_fisher_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_200k_fisher_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_glmpca_300k_fisher_def.R", sep="/"))
-# 
-# 
-# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_2.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_3.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_4.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_5.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_2.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_3.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_4.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_5.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_2.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_3.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_4.R", sep="/"))
-# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_5.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_sgdGMF_100k_1000_1000_250.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_sgdGMF_200k_2000_1000_250.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_sgdGMF_300k_3000_1000_250.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_100k_avagrad_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_200k_avagrad_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_300k_avagrad_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_100k_fisher_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_200k_fisher_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_glmpca_300k_fisher_def.R", sep="/"))
+
+
+source(paste(path_casestudy, "CaseStudy_NewWave_100k_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_2.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_3.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_4.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_5.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_200k_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_2.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_3.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_4.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_5.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_300k_def.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_2.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_3.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_4.R", sep="/"))
+source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_5.R", sep="/"))
 
 
 # This script computes the heatmap plot of the manuscript.
