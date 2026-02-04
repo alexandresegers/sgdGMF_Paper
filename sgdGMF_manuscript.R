@@ -71,40 +71,191 @@ source(paste(path_casestudy, "Model_selection_eigenvalues.R", sep="/"))
 # estimated with the scree plot.
 source(paste(path_casestudy, "CaseStudy_Model_fitting_full.R", sep="/"))
 
-# For the comparisons of the time-usage, sgdGMF is also run on smaller
-# parts of the data. Here, 5 times, the time is measured to compute the
+# For the comparisons of the time- and memory-usage, sgdGMF is also run on 
+# smaller parts of the data. Here, 5 times, the time is measured to compute the
 # dimensionality reduction for 100.000, 200.000 and 300.000 cells in this
 # dataset. This is also done for glmPCA with Avagrad estimation and with Fisher
-# estimation. Also, NewWave is used on the subsampled dataset. However, as
-# NewWave couldn't be run 5 times within the limited computing time (72 hours),
-# it was run in 5 different scripts for each subsampled dataset.
+# estimation. Also, NewWave is used on the subsampled dataset. Note that for
+# reference, the COAP scripts are added, but are not run here due to errors
+# that are returned.
 
-source(paste(path_casestudy, "CaseStudy_sgdGMF_100k_1000_1000_250.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_sgdGMF_200k_2000_1000_250.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_sgdGMF_300k_3000_1000_250.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_100k_avagrad_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_200k_avagrad_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_300k_avagrad_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_100k_fisher_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_200k_fisher_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_glmpca_300k_fisher_def.R", sep="/"))
+path_casestudy_memory <- "Benchmarking/CaseStudy/Memory"
+
+for (i in c(1:5)){
+  
+  script_name <- "CaseStudy_sgdGMF_100k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_100k_avagrad_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_100k_fisher_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  
+  script_name <- "CaseStudy_NewWave_100k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+}
 
 
-source(paste(path_casestudy, "CaseStudy_NewWave_100k_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_2.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_3.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_4.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_5.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_200k_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_2.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_3.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_4.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_5.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_300k_def.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_2.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_3.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_4.R", sep="/"))
-source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_5.R", sep="/"))
+for (i in c(1:5)){
+  
+  script_name <- "CaseStudy_sgdGMF_200k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_200k_avagrad_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_200k_fisher_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  
+  script_name <- "CaseStudy_NewWave_200k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+}
+
+
+for (i in c(1:5)){
+  
+  script_name <- "CaseStudy_sgdGMF_300k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_300k_avagrad_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  script_name <- "CaseStudy_glmpca_300k_fisher_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+  
+  
+  script_name <- "CaseStudy_NewWave_300k_memory.R"
+  script_path <- paste(path_casestudy_memory, script_name, sep="/")
+  
+  
+  cmd_logic <- paste0("setwd('", path_casestudy_memory, "'); source('", script_name, "')")
+  
+  system2("Rscript", 
+          args = c("-e", shQuote(cmd_logic), i),
+          stdout = "", 
+          stderr = "")
+}
+
+
+# These scripts are the old version without memory computation.
+#
+# source(paste(path_casestudy, "CaseStudy_sgdGMF_100k_1000_1000_250.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_sgdGMF_200k_2000_1000_250.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_sgdGMF_300k_3000_1000_250.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_100k_avagrad_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_200k_avagrad_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_300k_avagrad_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_100k_fisher_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_200k_fisher_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_glmpca_300k_fisher_def.R", sep="/"))
+# 
+# 
+# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_2.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_3.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_4.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_100k_def_5.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_2.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_3.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_4.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_200k_def_5.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_2.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_3.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_4.R", sep="/"))
+# source(paste(path_casestudy, "CaseStudy_NewWave_300k_def_5.R", sep="/"))
 
 
 # This script computes the heatmap plot of the manuscript.
@@ -112,6 +263,9 @@ source(paste(path_casestudy, "Heatmap_plot.R", sep="/"))
 
 # This script computes the time plot of the manuscript.
 source(paste(path_casestudy, "time_plots.R", sep="/"))
+
+# This script computes the memory plot of the manuscript.
+source(paste(path_casestudy, "Memory/Memory_plot_peakRAM.R", sep="/"))
 
 # Here, both figures are merged into one figure for the manuscript.
 source(paste(path_casestudy, "CaseStudy_merging_plots.R", sep="/"))

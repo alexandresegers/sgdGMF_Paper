@@ -1,0 +1,109 @@
+---
+title: "Untitled"
+output: html_document
+date: '2024-04-25'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+eigenvalues <- readRDS(file = "Output_files/eigenvalues_sgdGMF_link.RDS")
+
+```
+```{r}
+p1 <- ggplot(data = data.frame(eigenvalues = eigenvalues$lambda[1:50]), 
+             aes(x = 1:50, y = eigenvalues)) + 
+    geom_point() + 
+    theme_bw() + 
+    ylab("Eigenvalue") + 
+    xlab("Component number") + 
+    theme(panel.grid = element_blank()) + 
+    #geom_vline(xintercept = 10.5, col = "red") + 
+    geom_segment(
+               aes(x = 10.5, 
+                   xend  = 10.5, 
+                   y = 0, 
+                   yend = 30),
+               color = "red", lwd = 0.5) + 
+
+    geom_rect(aes(xmin = 2.5, xmax = 50.5, ymin = 0, ymax = 30), color = "grey", alpha = 0,
+              linetype='dashed', linewidth = 0.2) 
+p1
+
+p2 <- ggplot(data = data.frame(eigenvalues = eigenvalues$lambda[3:50]),
+             aes(x = 3:50, y = eigenvalues)) + geom_point() +
+    theme_bw() + 
+    ylab("Eigenvalue") + 
+    xlab("Component number") + 
+    theme(panel.grid = element_blank()) + 
+    geom_vline(xintercept = 10.5, col = "red")
+
+p2
+p3 <- p1  + annotation_custom(ggplotGrob(p2), xmin = 20, xmax = 50.5, ymin = 70, ymax = 110) +
+  geom_rect(aes(xmin = 20, xmax = 50.5, ymin = 70, ymax = 110), color='grey', 
+            linetype='dashed', alpha=0, linewidth = 0.2) +
+  geom_path(aes(x,y,group=grp), 
+            data=data.frame(x = c(2.5,20,50.5,50.5), y=c(30,70,27,70),grp=c(1,1,2,2)),
+            linetype='dashed', color = "grey", linewidth = 0.2)
+
+ggsave(p3, filename = "Figures/scree_plot.pdf")
+
+```
+
+```{r}
+
+plot_cluster <- readRDS(file = "Figures/heatmap_clusters_10LF_2.RDS")
+#plot_time_mem <- readRDS(file = "Memory/time_memory_plot.RDS")
+
+df_memory_usage <- readRDS("~/sgdGMF_Paper/Benchmarking/CaseStudy/Memory/df_memory.RDS")
+df_time_usage <- readRDS("~/sgdGMF_Paper/Benchmarking/CaseStudy/Memory/df_time.RDS")
+median_memory <- df_memory_usage %>% group_by(Samples, Method) %>% summarise("median" = median(Memory))
+median_time <- df_time_usage %>% group_by(Samples, Method) %>% summarise("median" = median(Time))
+
+plot_mem <- ggplot(data = df_memory_usage, aes(x = Samples, y = Memory, col = Method, group = interaction(Method))) +
+  geom_point() +
+  geom_line(data = median_memory, aes(x = as.numeric(Samples), y = median, col = Method)) + theme_bw() +
+  colScale +
+  xlab("Number of cells") +
+  ylab("Memory (GB)") +
+  labs(col = "Analysis method")
+
+plot_time <- ggplot(df_time_usage, aes(x = Samples, y = Time, col = Method, group = interaction(Method))) +
+  geom_point() +
+  geom_line(data = median_time, aes(x = as.numeric(Samples), y = median, col = Method)) + theme_bw() +
+  colScale +
+  xlab("Number of cells") +
+  ylab("Time (min)") +
+  labs(col = "Analysis method")
+
+
+arranged_plot <- ggarrange(
+    get_legend(plot + theme(legend.position = "bottom", legend.margin = margin(0, 0, 0, 0)) + 
+    guides(color=guide_legend(nrow=2, byrow=TRUE, title.position ="top", title.hjust = 0.5))),
+          plot_time + theme(legend.position = "none", 
+                            axis.title.x = element_blank(), axis.text.x = element_blank()),
+          plot_mem + theme(legend.position = "none"),
+          nrow = 3,
+          heights = c(0.12, 0.44, 0.44))
+
+plot_casestudy <- ggarrange(
+                            arranged_plot + theme(legend.position = "top",
+                                              legend.text = element_text(size = 10),
+                                              legend.title = element_text(size = 12),
+                                              panel.grid = element_blank(),
+                                              plot.margin = margin(r = 10)) + 
+    guides(color=guide_legend(nrow=2, byrow=TRUE, title.position ="top", title.hjust = 0.5)), 
+    ggplotify::as.ggplot(plot_cluster), 
+                            ncol = 2, 
+                            widths = c(2,3),labels = "AUTO")
+
+ggsave(plot_casestudy, filename = "Figures/CaseStudy_mainfigure.pdf")
+```
+
